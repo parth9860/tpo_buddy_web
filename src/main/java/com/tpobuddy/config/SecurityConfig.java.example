@@ -1,0 +1,54 @@
+package com.tpobuddy.config;
+
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.SecurityFilterChain;
+
+/**
+ * Example Spring Security Configuration Template.
+ * Rename this file to SecurityConfig.java to activate.
+ */
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(csrf -> csrf
+                .ignoringRequestMatchers("/api/**", "/logout", "/resume", "/profile")
+            )
+            .headers(headers -> headers
+                .frameOptions(frame -> frame.sameOrigin())
+                .cacheControl(cache -> cache.disable())
+            )
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+                .maximumSessions(2)
+            )
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/assets/**", "/react-dist/**", "/favicon.ico").permitAll()
+                .requestMatchers("/", "/index.jsp", "/login.jsp", "/register.jsp", "/forgot-password.jsp", "/react-app").permitAll()
+                .requestMatchers("/api/auth/**", "/logout").permitAll()
+                .requestMatchers("/actuator/**").permitAll()
+                .requestMatchers("/dashboard", "/student-dashboard.jsp").permitAll()
+                .requestMatchers("/resume", "/resume-analysis.jsp", "/api/resume/**").permitAll()
+                .requestMatchers("/ai-buddy", "/ai-buddy.jsp", "/api/ai/**").permitAll()
+                .requestMatchers("/interview", "/interview.jsp", "/api/interview/**").permitAll()
+                .requestMatchers("/react-portal", "/react-portal.jsp", "/portal", "/react-app").permitAll()
+                .requestMatchers("/tests", "/tests.jsp", "/api/tests/**").permitAll()
+                .requestMatchers("/jobs", "/jobs.jsp", "/api/jobs/**").permitAll()
+                .requestMatchers("/progress", "/progress.jsp").permitAll()
+                .requestMatchers("/profile", "/profile.jsp").permitAll()
+                .requestMatchers("/faculty", "/faculty-dashboard.jsp", "/api/faculty/**").permitAll()
+                .requestMatchers("/admin", "/admin-dashboard.jsp").permitAll()
+                .anyRequest().permitAll()
+            );
+
+        return http.build();
+    }
+}

@@ -1,0 +1,80 @@
+package com.tpobuddy.security;
+
+import com.tpobuddy.model.User;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
+import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.HandlerInterceptor;
+
+/**
+ * Example SessionAuthInterceptor Template.
+ * Rename this file to SessionAuthInterceptor.java to activate.
+ */
+@Component
+public class SessionAuthInterceptor implements HandlerInterceptor {
+
+    @Override
+    public boolean preHandle(HttpServletRequest req, HttpServletResponse res, Object handler) throws Exception {
+        String uri = req.getRequestURI();
+        String contextPath = req.getContextPath();
+        String path = uri.substring(contextPath.length());
+
+        if (path.startsWith("/assets/") || path.startsWith("/react-dist/") || path.equals("/") || path.equals("/index.jsp")
+                || path.equals("/login.jsp") || path.equals("/register.jsp")
+                || path.equals("/forgot-password.jsp") || path.startsWith("/api/auth/")
+                || path.equals("/react-portal") || path.equals("/react-portal.jsp") || path.equals("/portal")
+                || path.equals("/react-app")
+                || path.equals("/api/jobs/list") || path.equals("/api/notifications")
+                || path.equals("/api/student/metrics") || path.startsWith("/api/tests/questions")
+                || path.equals("/logout") || path.startsWith("/actuator/")) {
+            return true;
+        }
+
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.setHeader("Pragma", "no-cache");
+        res.setDateHeader("Expires", 0);
+
+        HttpSession session = req.getSession(false);
+        User user = (session != null) ? (User) session.getAttribute("currentUser") : null;
+
+        if (user == null) {
+            if (path.startsWith("/api/")) {
+                res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                res.setContentType("application/json");
+                res.setCharacterEncoding("UTF-8");
+                res.getWriter().write("{\"success\":false,\"error\":\"Authentication required\"}");
+                return false;
+            }
+            res.sendRedirect(contextPath + "/login.jsp?error=unauthorized");
+            return false;
+        }
+
+        if ((path.startsWith("/faculty") || path.startsWith("/api/faculty/"))
+                && !user.isTeacher() && !user.isAdmin()) {
+            if (path.startsWith("/api/")) {
+                res.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                res.setContentType("application/json");
+                res.setCharacterEncoding("UTF-8");
+                res.getWriter().write("{\"success\":false,\"error\":\"Faculty access required\"}");
+                return false;
+            }
+            res.sendRedirect(contextPath + "/dashboard?error=forbidden");
+            return false;
+        }
+
+        if (path.startsWith("/admin") && !user.isAdmin()) {
+            if (path.startsWith("/api/")) {
+                res.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                res.setContentType("application/json");
+                res.setCharacterEncoding("UTF-8");
+                res.getWriter().write("{\"success\":false,\"error\":\"Administrator access required\"}");
+                return false;
+            }
+            res.sendRedirect(contextPath + "/dashboard?error=forbidden");
+            return false;
+        }
+
+        return true;
+    }
+}

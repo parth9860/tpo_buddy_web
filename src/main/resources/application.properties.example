@@ -1,0 +1,56 @@
+# ==============================================================================
+# TPO Buddy - Spring Boot Enterprise Configuration (Template / Example)
+# Copy this file to application.properties and configure your credentials.
+# ==============================================================================
+spring.application.name=tpo-buddy
+server.port=8085
+server.servlet.context-path=
+
+# Embedded Tomcat & Session Management
+server.servlet.session.timeout=60m
+server.servlet.session.cookie.http-only=true
+server.servlet.session.cookie.name=TPOBUDDYSESSION
+
+# Spring MVC & JSP View Resolver
+spring.mvc.view.prefix=/
+spring.mvc.view.suffix=.jsp
+spring.mvc.static-path-pattern=/assets/**
+spring.web.resources.static-locations=classpath:/META-INF/resources/assets/,file:src/main/webapp/assets/
+
+# Multipart File Upload (Resume PDF)
+spring.servlet.multipart.max-file-size=10MB
+spring.servlet.multipart.max-request-size=15MB
+spring.servlet.multipart.enabled=true
+
+# Disable automatic JPA/DataSource bootstrap unless MySQL URL is provided
+spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+
+# Firebase Configuration (Replace with your actual Firebase Project credentials)
+firebase.projectId=YOUR_PROJECT_ID
+firebase.apiKey=YOUR_FIREBASE_API_KEY
+firebase.authDomain=YOUR_PROJECT_ID.firebaseapp.com
+firebase.databaseURL=https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com
+firebase.storageBucket=YOUR_PROJECT_ID.firebasestorage.app
+firebase.messagingSenderId=YOUR_MESSAGING_SENDER_ID
+firebase.appId=YOUR_APP_ID
+firebase.measurementId=YOUR_MEASUREMENT_ID
+
+# Roles & Access Control
+roles.student=student
+roles.faculty=teacher
+roles.admin=admin
+
+# Test & Placement Rules
+test.questionsPerSection=25
+test.defaultTimeMinutes=20
+test.passPercentage=60
+
+# Actuator Health & Metrics
+management.endpoints.web.exposure.include=health,info,metrics
+management.endpoint.health.show-details=always
+
+# Logging
+logging.level.root=INFO
+logging.level.com.tpobuddy=DEBUG
+logging.level.org.springframework.web=INFO
+logging.level.org.springframework.security=INFO
