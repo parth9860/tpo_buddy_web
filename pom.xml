@@ -6,7 +6,7 @@
 
     <groupId>com.tpobuddy</groupId>
     <artifactId>tpo-buddy</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <packaging>war</packaging>
     <name>TPO Buddy - Spring Boot</name>
     <description>TPO Buddy - AI-Based Placement Management System</description>

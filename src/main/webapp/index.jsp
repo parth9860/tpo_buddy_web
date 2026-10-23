@@ -177,5 +177,6 @@
     </section>
 
     <jsp:include page="/WEB-INF/fragments/footer.jsp" />
+    <!-- Dynamic Firebase initialization loaded securely via head.jsp -->
 </body>
 </html>
