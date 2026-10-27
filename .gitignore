@@ -1,8 +1,6 @@
 # ==============================================================================
 # Security, Credentials & Secret Files (Strictly Excluded from Repository)
 # ==============================================================================
-src/main/java/com/tpobuddy/config/SecurityConfig.java
-src/main/java/com/tpobuddy/security/SessionAuthInterceptor.java
 src/main/resources/application.properties
 src/main/resources/application-*.properties
 src/main/resources/application.yml

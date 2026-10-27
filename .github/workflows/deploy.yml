@@ -24,6 +24,13 @@ jobs:
           java-version: '21'
           cache: 'maven'
 
+      - name: Prepare Application Configuration for CI
+        run: |
+          if [ ! -f "src/main/resources/application.properties" ]; then
+            echo "Copying application.properties.example to application.properties for CI..."
+            cp src/main/resources/application.properties.example src/main/resources/application.properties
+          fi
+
       - name: Validate Backend Code & Run Test Suite
         run: |
           echo "Compiling and validating Spring Boot application integrity..."
