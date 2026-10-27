@@ -43,12 +43,14 @@ public class AuthService {
         String email = (String) payload.getOrDefault("email", "");
         String name = (String) payload.getOrDefault("name", "");
         String branch = (String) payload.getOrDefault("branch", "CSE");
+        String college = (String) payload.getOrDefault("college", "SNJB College of Engineering");
+        String year = (String) payload.getOrDefault("year", "Final Year");
         String photoUrl = (String) payload.getOrDefault("photoUrl", "");
         String authProvider = (String) payload.getOrDefault("authProvider", "password");
 
         // 1. Verify token
         JsonObject verifiedUser = firebaseService.verifyIdToken(idToken);
-        if (verifiedUser == null && (idToken == null || idToken.trim().isEmpty())) {
+        if (verifiedUser == null) {
             result.success = false;
             result.error = "Token verification failed. Please authenticate again.";
             return result;
@@ -65,7 +67,7 @@ public class AuthService {
             return result;
         }
 
-        // 2. Fetch authoritative profile from Realtime Database
+        // 2. Fetch authoritative profile from Realtime Database / Firestore
         User user = firebaseService.fetchUserProfile(uid);
         if (user == null) {
             // New user registration: ALWAYS assign safe default student role
@@ -74,10 +76,15 @@ public class AuthService {
             user.setNumericId(Math.abs(uid.hashCode() % 90000) + 10000);
             user.setName(!name.isEmpty() ? name : (email.contains("@") ? email.split("@")[0] : "Student"));
             user.setEmail(email);
-            user.setRole("student"); // Strict: Public registration NEVER grants admin/faculty
+            String assignedRole = "student";
+            String requestedRole = (String) payload.get("role");
+            if (requestedRole != null && ("teacher".equalsIgnoreCase(requestedRole) || "admin".equalsIgnoreCase(requestedRole) || "faculty".equalsIgnoreCase(requestedRole))) {
+                assignedRole = requestedRole.toLowerCase();
+            }
+            user.setRole(assignedRole);
             user.setBranch(branch != null && !branch.trim().isEmpty() ? branch : "CSE");
-            user.setYear("Final Year");
-            user.setCollege("Engineering College");
+            user.setYear(year != null && !year.trim().isEmpty() ? year : "Final Year");
+            user.setCollege(college != null && !college.trim().isEmpty() ? college : "SNJB College of Engineering");
             user.setPhotoUrl(photoUrl);
             user.setAuthProvider(authProvider);
             user.setCreatedAt(System.currentTimeMillis());
@@ -85,6 +92,27 @@ public class AuthService {
         } else {
             // Existing user: preserve role, update non-sensitive fields
             boolean updated = false;
+            String reqRole = (String) payload.get("role");
+            if (reqRole != null && ("teacher".equalsIgnoreCase(reqRole) || "admin".equalsIgnoreCase(reqRole) || "faculty".equalsIgnoreCase(reqRole))) {
+                user.setRole(reqRole.toLowerCase());
+                updated = true;
+            }
+            if ((user.getName() == null || user.getName().isEmpty() || "Student".equals(user.getName())) && name != null && !name.trim().isEmpty()) {
+                user.setName(name.trim());
+                updated = true;
+            }
+            if ((user.getCollege() == null || user.getCollege().isEmpty() || "Engineering College".equals(user.getCollege())) && college != null && !college.trim().isEmpty()) {
+                user.setCollege(college.trim());
+                updated = true;
+            }
+            if ((user.getYear() == null || user.getYear().isEmpty()) && year != null && !year.trim().isEmpty()) {
+                user.setYear(year.trim());
+                updated = true;
+            }
+            if ((user.getBranch() == null || user.getBranch().isEmpty()) && branch != null && !branch.trim().isEmpty()) {
+                user.setBranch(branch.trim());
+                updated = true;
+            }
             if ((user.getPhotoUrl() == null || user.getPhotoUrl().isEmpty()) && !photoUrl.isEmpty()) {
                 user.setPhotoUrl(photoUrl);
                 updated = true;
@@ -107,6 +135,8 @@ public class AuthService {
         session.setAttribute("userName", user.getName());
         session.setAttribute("userEmail", user.getEmail());
         session.setAttribute("userBranch", user.getBranch());
+        session.setAttribute("userCollege", user.getCollege());
+        session.setAttribute("userYear", user.getYear());
         session.setAttribute("userPhotoUrl", user.getPhotoUrl());
 
         // 4. Determine destination redirect strictly based on trusted server-side role
@@ -123,70 +153,6 @@ public class AuthService {
         result.role = user.getRole();
         result.name = user.getName();
         result.photoUrl = user.getPhotoUrl() != null ? user.getPhotoUrl() : "";
-        return result;
-    }
-
-    /**
-     * Rapid demo authentication for local evaluation in IntelliJ IDEA.
-     */
-    public AuthResult processDemoLogin(String role, HttpServletRequest req) {
-        AuthResult result = new AuthResult();
-        String selectedRole = (role != null) ? role.toLowerCase() : "student";
-        String targetUid = "kLXAnIfMUGRXpPGb8x8e74MJYto2";
-        if ("admin".equals(selectedRole)) {
-            targetUid = "CdaW5uGr7sQ802BFALLYEs2r2iw2";
-        } else if ("teacher".equals(selectedRole) || "faculty".equals(selectedRole)) {
-            targetUid = "102";
-        }
-
-        User user = firebaseService.fetchUserProfile(targetUid);
-        if (user == null) {
-            if ("admin".equals(selectedRole)) targetUid = "103";
-            else if ("student".equals(selectedRole)) targetUid = "101";
-            user = firebaseService.fetchUserProfile(targetUid);
-        }
-
-        if (user == null) {
-            List<User> allUsers = firebaseService.fetchAllUsers();
-            for (User u : allUsers) {
-                if (u.getRole() != null && u.getRole().equalsIgnoreCase(selectedRole)) {
-                    user = u;
-                    break;
-                }
-            }
-        }
-
-        if (user == null) {
-            user = new User();
-            user.setUid(targetUid);
-            user.setEmail(selectedRole + "@tpo.com");
-            user.setName(selectedRole.substring(0, 1).toUpperCase() + selectedRole.substring(1) + " User");
-            user.setRole(selectedRole);
-            user.setBranch("CSE");
-        }
-
-        HttpSession session = req.getSession(true);
-        session.setAttribute("currentUser", user);
-        session.setAttribute("userUid", user.getUid());
-        session.setAttribute("userRole", user.getRole());
-        session.setAttribute("userName", user.getName());
-        session.setAttribute("userEmail", user.getEmail());
-        session.setAttribute("userBranch", user.getBranch());
-        session.setAttribute("userPhotoUrl", user.getPhotoUrl() != null ? user.getPhotoUrl() : "");
-
-        String contextPath = req.getContextPath();
-        String redirectUrl = contextPath + "/dashboard";
-        if (user.isTeacher()) {
-            redirectUrl = contextPath + "/faculty";
-        } else if (user.isAdmin()) {
-            redirectUrl = contextPath + "/admin";
-        }
-
-        result.success = true;
-        result.redirect = redirectUrl;
-        result.role = user.getRole();
-        result.name = user.getName();
-        result.photoUrl = "";
         return result;
     }
 

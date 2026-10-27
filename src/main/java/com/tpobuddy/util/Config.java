@@ -21,8 +21,13 @@ public class Config {
     }
 
     public static String get(String key, String defaultValue) {
-        String envKey = key.replace('.', '_').toUpperCase();
-        String envVal = System.getenv(envKey);
+        String envKey1 = key.replace('.', '_').toUpperCase();
+        String envVal = System.getenv(envKey1);
+        if (envVal != null && !envVal.trim().isEmpty()) {
+            return envVal.trim();
+        }
+        String envKey2 = key.replaceAll("([a-z])([A-Z]+)", "$1_$2").replace('.', '_').toUpperCase();
+        envVal = System.getenv(envKey2);
         if (envVal != null && !envVal.trim().isEmpty()) {
             return envVal.trim();
         }

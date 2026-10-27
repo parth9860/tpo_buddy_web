@@ -43,6 +43,20 @@ public class TestAttempt implements Serializable {
     private String proctoringStatus; // "VALIDATED", "SUSPICIOUS", "FLAGGED", "REVIEWED"
     private String reviewNotes;
 
+    // SNJB Placement Test Series Analytics Fields
+    private String testTitle;
+    private double marksEarned = 0.0;
+    private double maxMarks = 0.0;
+    private int incorrectAnswers = 0;
+    private int unansweredCount = 0;
+    private long timeTakenSeconds = 0L;
+    private double accuracyPercentage = 0.0;
+    private boolean negativeMarkingApplied = false;
+    private double negativeMarksDeducted = 0.0;
+    private String sectionBreakdownJson = "{}";
+    private String weakTopicsJson = "[]";
+    private String recommendedPractice = "";
+
     public TestAttempt() {
         this.status = "submitted";
         this.submissionReason = "manual";
@@ -299,5 +313,101 @@ public class TestAttempt implements Serializable {
 
     public void setCurrentQuestionIndex(int currentQuestionIndex) {
         this.currentQuestionIndex = currentQuestionIndex;
+    }
+
+    public String getTestTitle() {
+        return testTitle != null ? testTitle : (category != null ? category : "Placement Assessment");
+    }
+
+    public void setTestTitle(String testTitle) {
+        this.testTitle = testTitle;
+    }
+
+    public double getMarksEarned() {
+        return marksEarned;
+    }
+
+    public void setMarksEarned(double marksEarned) {
+        this.marksEarned = marksEarned;
+    }
+
+    public double getMaxMarks() {
+        return maxMarks;
+    }
+
+    public void setMaxMarks(double maxMarks) {
+        this.maxMarks = maxMarks;
+    }
+
+    public int getIncorrectAnswers() {
+        return incorrectAnswers;
+    }
+
+    public void setIncorrectAnswers(int incorrectAnswers) {
+        this.incorrectAnswers = incorrectAnswers;
+    }
+
+    public int getUnansweredCount() {
+        return unansweredCount;
+    }
+
+    public void setUnansweredCount(int unansweredCount) {
+        this.unansweredCount = unansweredCount;
+    }
+
+    public long getTimeTakenSeconds() {
+        return timeTakenSeconds;
+    }
+
+    public void setTimeTakenSeconds(long timeTakenSeconds) {
+        this.timeTakenSeconds = timeTakenSeconds;
+    }
+
+    public double getAccuracyPercentage() {
+        return accuracyPercentage;
+    }
+
+    public void setAccuracyPercentage(double accuracyPercentage) {
+        this.accuracyPercentage = accuracyPercentage;
+    }
+
+    public boolean isNegativeMarkingApplied() {
+        return negativeMarkingApplied;
+    }
+
+    public void setNegativeMarkingApplied(boolean negativeMarkingApplied) {
+        this.negativeMarkingApplied = negativeMarkingApplied;
+    }
+
+    public double getNegativeMarksDeducted() {
+        return negativeMarksDeducted;
+    }
+
+    public void setNegativeMarksDeducted(double negativeMarksDeducted) {
+        this.negativeMarksDeducted = negativeMarksDeducted;
+    }
+
+    public String getSectionBreakdownJson() {
+        return sectionBreakdownJson != null ? sectionBreakdownJson : "{}";
+    }
+
+    public void setSectionBreakdownJson(String sectionBreakdownJson) {
+        this.sectionBreakdownJson = sectionBreakdownJson;
+    }
+
+    public String getWeakTopicsJson() {
+        return weakTopicsJson != null ? weakTopicsJson : "[]";
+    }
+
+    public void setWeakTopicsJson(String weakTopicsJson) {
+        this.weakTopicsJson = weakTopicsJson;
+    }
+
+    public String getRecommendedPractice() {
+        return recommendedPractice != null ? recommendedPractice : "";
+    }
+
+    public void setRecommendedPractice(String recommendedPractice) {
+        this.recommendedPractice = recommendedPractice;
     }
 }

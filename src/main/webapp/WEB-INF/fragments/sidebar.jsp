@@ -24,6 +24,12 @@
             </a>
         </li>
         <li>
+            <a href="${pageContext.request.contextPath}/tests" class="nav-item-link <%= currentPath.contains("tests") ? "active" : "" %>">
+                <span class="nav-icon">&#128221;</span>
+                <span>Placement Tests</span>
+            </a>
+        </li>
+        <li>
             <a href="${pageContext.request.contextPath}/interview" class="nav-item-link <%= currentPath.contains("interview") ? "active" : "" %>">
                 <span class="nav-icon">&#127897;</span>
                 <span>AI Mock Interview</span>
@@ -41,12 +47,7 @@
                 <span>Career Copilot AI</span>
             </a>
         </li>
-        <li>
-            <a href="${pageContext.request.contextPath}/tests" class="nav-item-link <%= currentPath.contains("tests") ? "active" : "" %>">
-                <span class="nav-icon">&#9989;</span>
-                <span>Practice Tests</span>
-            </a>
-        </li>
+
         <li>
             <a href="${pageContext.request.contextPath}/jobs" class="nav-item-link <%= currentPath.contains("jobs") ? "active" : "" %>">
                 <span class="nav-icon">&#128188;</span>

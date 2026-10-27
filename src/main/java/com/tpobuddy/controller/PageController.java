@@ -17,7 +17,7 @@ public class PageController {
         return "index";
     }
 
-    @GetMapping("/login.jsp")
+    @GetMapping({"/login", "/login.jsp"})
     public String login(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         User user = (session != null) ? (User) session.getAttribute("currentUser") : null;
@@ -29,7 +29,7 @@ public class PageController {
         return "login";
     }
 
-    @GetMapping("/register.jsp")
+    @GetMapping({"/register", "/register.jsp"})
     public String register(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         User user = (session != null) ? (User) session.getAttribute("currentUser") : null;
@@ -39,7 +39,7 @@ public class PageController {
         return "register";
     }
 
-    @GetMapping("/forgot-password.jsp")
+    @GetMapping({"/forgot-password", "/forgot-password.jsp"})
     public String forgotPassword() {
         return "forgot-password";
     }

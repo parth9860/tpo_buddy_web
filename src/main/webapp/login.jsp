@@ -1,4 +1,11 @@
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<%
+    // Firebase social sign-in availability is derived from server-side configuration only.
+    String firebaseApiKey = com.tpobuddy.util.Config.getFirebaseApiKey();
+    boolean firebaseAuthConfigured = firebaseApiKey != null && !firebaseApiKey.trim().isEmpty();
+    String firebaseAppId = com.tpobuddy.util.Config.getFirebaseAppId();
+    boolean fbFacebookConfigured = firebaseAuthConfigured && (firebaseAppId != null && !firebaseAppId.trim().isEmpty());
+%>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -18,10 +25,13 @@
                 <p style="font-size: 0.9rem; margin: 0;">Sign in to your synchronized TPO Buddy account</p>
             </div>
 
+            <!-- Inline authentication error message (also mirrored to toast) -->
+            <div id="loginError" class="alert alert-error" role="alert" style="display: none;"></div>
+
             <form id="loginForm" onsubmit="handleLogin(event)">
                 <div class="form-group">
                     <label for="email" class="form-label">Email Address</label>
-                    <input type="email" id="email" class="form-control" placeholder="name@college.edu" required autocomplete="email">
+                    <input type="email" id="email" name="email" class="form-control" placeholder="name@college.edu" required autocomplete="email" inputmode="email" />
                 </div>
 
                 <div class="form-group">
@@ -29,70 +39,47 @@
                         <label for="password" class="form-label" style="margin: 0;">Password</label>
                         <a href="${pageContext.request.contextPath}/forgot-password.jsp" style="font-size: 0.8rem;">Forgot Password?</a>
                     </div>
-                    <div style="position: relative;">
-                        <input type="password" id="password" class="form-control" placeholder="••••••••" required style="padding-right: 4rem;">
-                        <button type="button" onclick="togglePasswordVisibility('password', this)" style="position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); font-size: 0.8rem; cursor: pointer;">Show</button>
+                    <div class="password-wrap">
+                        <input type="password" id="password" name="password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+                        <button type="button" id="togglePasswordVisibility" class="password-toggle" onclick="togglePasswordVisibility('password', this)" aria-label="Show password" aria-pressed="false">Show</button>
                     </div>
                 </div>
 
                 <button type="submit" id="btnSubmit" class="btn btn-primary" style="width: 100%; padding: 0.85rem; margin-top: 0.5rem;">
-                    Sign In
+                    <span class="btn-label">Sign In</span>
                 </button>
             </form>
 
-            <!-- Clean Divider: OR CONTINUE WITH -->
-            <div class="social-divider" aria-hidden="true">
-                <span>OR CONTINUE WITH</span>
-            </div>
-
-            <!-- Social Authentication Buttons (Google & Facebook) -->
-            <div class="social-auth-buttons">
-                <!-- Option 2: Continue with Google -->
-                <button type="button" id="btnGoogle" class="social-btn social-btn-google" onclick="handleSocialLogin('google')" title="Sign in with your Google account" aria-label="Continue with Google">
-                    <svg class="social-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-                        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
-                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
-                        <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
-                        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
-                    </svg>
-                    <span class="btn-text">Continue with Google</span>
-                </button>
-
-                <!-- Option 3: Continue with Facebook -->
-                <button type="button" id="btnFacebook" class="social-btn social-btn-facebook" onclick="handleSocialLogin('facebook')" title="Sign in with your Facebook account" aria-label="Continue with Facebook">
-                    <svg class="social-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-                        <path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                    </svg>
-                    <span class="btn-text">Continue with Facebook</span>
-                </button>
-            </div>
-
-            <!-- Live Firebase Verified Accounts for Testing -->
-            <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(99, 102, 241, 0.08); border: 1px dashed rgba(99, 102, 241, 0.35); border-radius: 12px; text-align: center;">
-                <div style="font-size: 0.8rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 0.35rem;">
-                    <span>&#9889;</span> Live Firebase Accounts (1-Click Sign In)
+            <!-- Clean Divider: OR CONTINUE WITH (only when a social provider is configured) -->
+            <% if (firebaseAuthConfigured) { %>
+                <div class="social-divider" aria-hidden="true">
+                    <span>OR CONTINUE WITH</span>
                 </div>
-                <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
-                    <button type="button" onclick="fillAndSubmitAccount('student@tpo.com', 'password123')" class="btn btn-sm" style="background: #3b82f6; color: white; padding: 0.4rem 0.75rem; font-size: 0.8rem; border-radius: 6px; border: none; cursor: pointer; font-weight: 600;">Student (Alex)</button>
-                    <button type="button" onclick="fillAndSubmitAccount('teacher@tpo.com', 'password123')" class="btn btn-sm" style="background: #10b981; color: white; padding: 0.4rem 0.75rem; font-size: 0.8rem; border-radius: 6px; border: none; cursor: pointer; font-weight: 600;">Faculty (Prof. Smith)</button>
-                    <button type="button" onclick="fillAndSubmitAccount('admin@tpo.com', 'admin123')" class="btn btn-sm" style="background: #8b5cf6; color: white; padding: 0.4rem 0.75rem; font-size: 0.8rem; border-radius: 6px; border: none; cursor: pointer; font-weight: 600;">Admin Console</button>
-                </div>
-            </div>
 
-            <script>
-                function fillAndSubmitAccount(email, pass) {
-                    const emailInput = document.getElementById('email');
-                    const passInput = document.getElementById('password');
-                    if (emailInput && passInput) {
-                        emailInput.value = email;
-                        passInput.value = pass;
-                        const form = document.getElementById('loginForm');
-                        if (form) {
-                            form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-                        }
-                    }
-                }
-            </script>
+                <!-- Social Authentication Buttons (Google & Facebook) -->
+                <div class="social-auth-buttons">
+                    <!-- Continue with Google -->
+                    <button type="button" id="btnGoogle" class="social-btn social-btn-google" onclick="handleSocialLogin('google')" title="Sign in with your Google account" aria-label="Continue with Google">
+                        <svg class="social-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+                            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                            <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                        </svg>
+                        <span class="btn-text">Continue with Google</span>
+                    </button>
+
+                    <!-- Continue with Facebook -->
+                    <% if (fbFacebookConfigured) { %>
+                    <button type="button" id="btnFacebook" class="social-btn social-btn-facebook" onclick="handleSocialLogin('facebook')" title="Sign in with your Facebook account" aria-label="Continue with Facebook">
+                        <svg class="social-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                            <path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                        </svg>
+                        <span class="btn-text">Continue with Facebook</span>
+                    </button>
+                    <% } %>
+                </div>
+            <% } %>
 
             <div style="text-align: center; margin-top: 1.5rem; font-size: 0.875rem; color: var(--text-secondary);">
                 Don't have an account?
@@ -125,6 +112,24 @@
                 </form>
             </div>
         </div>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', () => {
+                const params = new URLSearchParams(window.location.search);
+                const emailParam = params.get('email');
+                if (emailParam) {
+                    const emailInput = document.getElementById('email');
+                    if (emailInput) {
+                        emailInput.value = emailParam;
+                        const passInput = document.getElementById('password');
+                        if (passInput) passInput.focus();
+                    }
+                }
+                if (params.get('registered') === 'true') {
+                    showToast('Account created successfully! Please sign in with your password.', 'success');
+                }
+            });
+        </script>
     </main>
 
     <jsp:include page="/WEB-INF/fragments/footer.jsp" />

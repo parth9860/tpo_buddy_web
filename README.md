@@ -20,7 +20,9 @@ A modernized, enterprise-grade Training & Placement Officer (TPO) web platform b
 7. [Running the Application](#-running-the-application)
 8. [Role-Based Access Control (RBAC) Matrix](#-role-based-access-control-rbac-matrix)
 9. [API Endpoint Reference Table](#-api-endpoint-reference-table)
-10. [Troubleshooting Guide for Beginners](#-troubleshooting-guide-for-beginners)
+10. [SNJB College – Main Placement Test Series](#-snjb-college--main-placement-test-series)
+11. [Google Gemini AI Question Generation Engine](#-google-gemini-ai-question-generation-engine)
+12. [Troubleshooting Guide for Beginners](#-troubleshooting-guide-for-beginners)
 
 ---
 
@@ -352,6 +354,239 @@ Access control is enforced at two distinct levels:
 | Method | Endpoint | Description | Request Body | Expected Response |
 |---|---|---|---|---|
 | `POST` | `/api/jobs/apply` | Applies student profile to job posting | `{"jobId": "-O123abc"}` | `{"success": true, "message": "Application submitted"}` |
+
+### 6. SNJB College – Main Placement Test Series
+| Method | Endpoint | Access Role | Description |
+|---|---|---|---|
+| `GET` | `/api/snjb/categories` | Student / All | Retrieves all 8 SNJB placement test categories with test counts and icons |
+| `GET` | `/api/snjb/student/summary` | Student | Returns student readiness progress, completed tests, overall score %, and readiness circle data |
+| `GET` | `/api/snjb/tests` | Student | Fetches published tests filtered by candidate's branch, academic year, and completion status |
+| `GET` | `/api/snjb/tests/{testId}` | Student | Retrieves public test details (instructions, duration, questions, negative marking) |
+| `GET` | `/api/snjb/active-session` | Student | Resumes interrupted active test session without losing progress or timer state |
+| `POST` | `/api/snjb/tests/start` | Student | Starts secure test attempt; generates randomized question order; starts server timer |
+| `POST` | `/api/snjb/tests/save-progress` | Student | Periodically autosaves answers and current question index in background |
+| `POST` | `/api/snjb/tests/log-event` | Student | Logs proctoring violations; triggers automatic submission on 3rd violation |
+| `POST` | `/api/snjb/tests/submit` | Student | Evaluates answers on server; calculates negative marks, accuracy %, topic breakdown, and diagnoses weak areas |
+| `GET` | `/api/snjb/results/{attemptId}` | Student | Retrieves full scorecard, performance metrics, weak topics advice, and verified explanations |
+| `GET` | `/api/snjb/admin/tests` | Faculty / TPO / Admin | Retrieves all tests including DRAFT, PUBLISHED, and ARCHIVED |
+| `POST` | `/api/snjb/admin/tests/save` | Faculty / TPO / Admin | Creates or updates test configuration (duration, marks, negative marking, attempt limits, target branch/year) |
+| `POST` | `/api/snjb/admin/tests/{testId}/status` | Faculty / TPO / Admin | Toggles test status between PUBLISHED, DRAFT, and ARCHIVED |
+| `POST` | `/api/snjb/admin/tests/{testId}/duplicate` | Faculty / TPO / Admin | Clones an existing test definition to a new draft test |
+| `DELETE` | `/api/snjb/admin/tests/{testId}` | Faculty / TPO / Admin | Deletes a test definition from the series |
+| `GET` | `/api/snjb/admin/questions` | Faculty / TPO / Admin | Fetches the full question bank repository |
+| `POST` | `/api/snjb/admin/questions/save` | Faculty / TPO / Admin | Adds a verified MCQ with options, correct answer key, marks, and explanation |
+| `POST` | `/api/snjb/admin/questions/import-csv` | Faculty / TPO / Admin | Bulk imports validated questions from a standard CSV spreadsheet |
+| `GET` | `/api/snjb/admin/analytics` | Faculty / TPO / Admin | Computes batch-level performance, pass rates, and cohort weak topic diagnosis |
+| `GET` | `/api/snjb/admin/export-results` | Faculty / TPO / Admin | Generates and streams downloadable CSV report containing all student test scores and accuracy |
+
+---
+
+## 🏛️ SNJB College – Main Placement Test Series
+
+### 1. Overview & Purpose
+The **SNJB College – Main Placement Test Series** is an enterprise-grade placement preparation system integrated into the TPO Buddy platform specifically tailored for students of **SNJB's Late Sau. K. B. Jain College of Engineering, Chandwad**. It prepares students for high-stakes IT, core engineering, and product company recruitment drives through authentic timed tests, server-enforced proctoring, and automated skill-gap analysis.
+
+### 2. The 8 Placement Test Categories
+1. **Quantitative Aptitude**: Percentages, profit & loss, ratios, averages, time & work, time & distance, probability, permutations & combinations.
+2. **Logical Reasoning**: Number series, coding-decoding, blood relations, directions, puzzles, seating arrangements, syllogisms.
+3. **Verbal Ability**: Grammar, vocabulary, sentence correction, reading comprehension, idioms & phrases.
+4. **Programming and Coding**: Java fundamentals, OOP pillars (inheritance, polymorphism, encapsulation, abstraction), exception handling, collections, arrays, strings, algorithms.
+5. **Core Computer Science**: DBMS & SQL queries, Operating Systems (concurrency, paging, scheduling), Computer Networks (OSI layers, TCP/UDP), Software Engineering.
+6. **Technical Interview Preparation**: Output prediction, Java concurrency, database transactions (ACID), design patterns, debugging questions.
+7. **Company-Specific Mock Tests**: Practice patterns configured for top recruiters (TCS NQT, Infosys, Capgemini, Cognizant, Wipro) without false official claims.
+8. **Full-Length Mock Tests**: Comprehensive multi-section placement simulators testing speed, accuracy, and endurance.
+
+### 3. Test Configuration & Exam Security Engine
+- **Configurable Test Parameters**: Title, instructions, category, subcategory, difficulty (Easy, Medium, Hard), duration, question count, marks per question, negative marking deduction (e.g. -0.5 / wrong answer), passing percentage, allowed attempts (0 for unlimited, or capped), target branch, and target academic year.
+- **Pre-Test Hardware Verification**: Webcam live feed verification and candidate integrity consent modal prior to examination launch.
+- **Mandatory Fullscreen & Distraction-Free Mode**: Automatically hides distracting navigation elements and traps history back-buttons.
+- **Three-Strike Security Rule**: Focus-loss, window minimization, tab-switching, and fullscreen exits are debounced and counted. Reaching 3 violations automatically terminates and submits the test.
+- **Refresh Resilience**: Page reloads or accidental browser closes restore remaining seconds, saved answers, and violation count from the server without resetting counters.
+- **Progressive Autosave**: Answer selections are debounced and synced every 500ms to prevent data loss.
+
+### 4. Server-Side Scoring & Weak Topic Diagnosis
+- **Authoritative Grading**: Scores, marks earned, accuracy %, and correct answers are evaluated exclusively on the server (`SnjbTestController` & `SnjbTestService`). Client-side answers keys are never exposed during an active exam.
+- **Negative Marking Support**: Correct answers award full question marks; wrong answers apply configurable deductions; unanswered questions carry no penalty.
+- **Skill-Gap Analysis**: When accuracy in a tested topic falls below 60%, it is classified as a "Weak Topic" and highlighted with personalized remediation advice (e.g., *"Focus Area: Java Polymorphism — review method overriding rules"*).
+- **Standalone Scorecard Modal**: Students and faculty can view detailed performance metrics, section mastery bars, student choices, verified correct answers, and educational explanations at any time from their assessment history.
+
+### 5. TPO & Administrator Management Console
+- Located in `/faculty` (with quick launcher in `/admin`).
+- **Test Management**: Create, edit, clone/duplicate, publish, unpublish, and delete tests.
+- **Question Bank**: Add questions manually with options, answer keys, and explanations, or bulk import hundreds of questions via CSV (`multipart/form-data`).
+- **Downloadable Sample CSV Template**: One-click template download pre-formatted with column headers.
+- **Student Performance Export**: Instant CSV download (`GET /api/snjb/admin/export-results`) for placement records, NAAC audits, and student counseling.
+- **Cohort Weak Topic Diagnosis**: Aggregates test performance across all attempts to show department faculty which topics need remedial workshops.
+
+### 6. Firebase Realtime Database & Firestore Security
+- **`snjb_tests`**: Published tests readable by authenticated students; writing and draft access restricted to teachers, TPOs, and admins.
+- **`snjb_categories`**: Readable by all authenticated users; writable by faculty and admin.
+- **`snjb_questions`**: Questions and answer keys restricted to authorized backend operations and faculty/admin to prevent answer leaks.
+- **`snjb_attempts`**: Linked to candidate's authenticated `auth.uid`. Students can only read and write their own attempt records.
+
+---
+
+## 🤖 Google Gemini AI Question Generation Engine
+
+### 1. Overview & Architectural Design
+TPO Buddy features a native, server-side integration with the **Google Gemini API** (`gemini-1.5-flash` by default, configurable to any supported Gemini model). It dynamically synthesizes fresh, unique campus placement multiple-choice questions (MCQs) and technical coding problems aligned with the 4-Phase SNJB Placement Syllabus.
+
+**Key Architecture Tenets:**
+- **Zero Client-Side Secret Leakage**: The Gemini API key is never exposed in JSP files, HTML, JavaScript, browser storage, or client-facing network calls. It is injected into `GeminiQuestionService` strictly on the Spring Boot backend via the `GEMINI_API_KEY` environment variable or `gemini.api.key` property.
+- **Dynamic Semantic Validation**: Every generated MCQ undergoes automated checks before previewing:
+  1. Ensures exactly 4 distinct, non-empty choices.
+  2. Arithmetic and mathematical questions (e.g. HCF/LCM, Percentages, Profit and Loss) are verified against the declared correct answer index.
+  3. Step-by-step mathematical explanations are required for Quantitative Aptitude.
+  4. Coding challenges provide problem statements, constraints, input/output formats, and hidden validation test cases.
+- **Semantic Duplicate Prevention (`QuestionUniquenessTracker`)**: Normalizes question statements and calculates Jaccard word-similarity to detect near-duplicates and enforce question variety.
+- **Graceful Fallback & Reliability**: If the API key is missing, network fails, or Google AI quota is reached, existing verified questions in the Firebase repository remain active, and students can practice uninterrupted.
+
+---
+
+### 2. Step-by-Step Gemini API Setup Guide (Windows & Cross-Platform)
+
+#### Step 1: Obtain a Gemini API Key
+1. Go to the [Google AI Studio](https://aistudio.google.com/) portal.
+2. Sign in with your Google account.
+3. Click on **"Get API key"** -> **"Create API key"** (select or create a Google Cloud Project).
+4. Copy your generated API key. Keep it secret.
+
+#### Step 2: Set `GEMINI_API_KEY` in Your Local Environment
+
+**On Windows (PowerShell - Recommended):**
+```powershell
+# Set for current PowerShell terminal session:
+$env:GEMINI_API_KEY = "your_actual_gemini_api_key_here"
+
+# Or set permanently for your user account:
+[System.Environment]::SetEnvironmentVariable("GEMINI_API_KEY", "your_actual_gemini_api_key_here", "User")
+```
+
+**On Windows (Command Prompt - CMD):**
+```cmd
+set GEMINI_API_KEY=your_actual_gemini_api_key_here
+```
+
+**Using `.env` Template:**
+Copy [.env.example](file:///.env.example) to `.env` in the project root:
+```ini
+GEMINI_API_KEY=your_actual_gemini_api_key_here
+GEMINI_MODEL=gemini-1.5-flash
+```
+
+#### Step 3: Configure Spring Boot Properties (Optional Override)
+In `src/main/resources/application.properties`:
+```properties
+# Google Gemini AI Question Generation Configuration
+gemini.api.key=${GEMINI_API_KEY:}
+gemini.model=${GEMINI_MODEL:gemini-1.5-flash}
+gemini.timeout.seconds=30
+```
+
+#### Step 4: Launch or Restart Spring Boot
+Run the application from the root directory:
+```powershell
+.\START_SPRING_BOOT.bat
+```
+Or with Maven:
+```powershell
+mvn spring-boot:run
+```
+
+#### Step 5: Verify the Configuration Without Exposing Secrets
+Call the diagnostic health endpoint (or open `/faculty`):
+```bash
+curl -X GET http://localhost:8085/api/admin/questions/gemini/status
+```
+**Sample Safe Response:**
+```json
+{
+  "configured": true,
+  "maskedKey": "AIzaSyD...X9bQ",
+  "model": "gemini-1.5-flash",
+  "activeTrackerDuplicatesDetected": 0,
+  "status": "READY"
+}
+```
+*(Notice that the secret key is safely masked with ellipsis; raw credentials are never leaked.)*
+
+---
+
+### 3. Administrator Question Generation & Review Workflow
+1. Navigate to `http://localhost:8085/faculty#snjb-management` (or click **"✨ AI Question Generator"** from the Admin Console).
+2. Click **"✨ Generate with Gemini AI"** to open the Gemini Generation Console.
+3. Select your section (e.g. *Quantitative Aptitude*).
+4. Click one of the **Phase 1 Priority Topic Chips** (e.g. `🔢 Number System`, `➗ HCF & LCM`, `📐 Divisibility Rules`, `📊 Percentages`, `💹 Profit & Loss`, `🏷️ Discounts`).
+5. Choose the difficulty (*Easy*, *Medium*, *Hard*) and question count (e.g. *10 Questions*).
+6. Click **"✨ Generate with Gemini AI"**.
+7. The loading indicator tracks real-time generation progress and elapsed seconds while the backend contacts Gemini and validates the JSON output.
+8. Inspect the generated questions in the **Editable Preview Area**:
+   - Review and edit question statements.
+   - Edit option text and verify or toggle the radio button to designate the correct answer choice.
+   - Review step-by-step arithmetic explanations and derivations.
+   - Discard unsuitable questions or regenerate single replacements.
+9. Click **"💾 Save Approved Questions to Question Bank"**.
+10. The backend validates and writes the approved questions to the Firebase Realtime Database (`/questions` node). Published questions immediately become available in student tests!
+
+---
+
+### 4. Troubleshooting Common Gemini Issues
+
+| Issue / Error | Likely Root Cause | Recommended Remediation |
+|---|---|---|
+| **`401 Unauthorized / Invalid API Key`** | The API key is misspelled or expired. | Verify your key at [Google AI Studio](https://aistudio.google.com/). Ensure no trailing whitespace when exporting `$env:GEMINI_API_KEY`. |
+| **`429 Quota Exhausted / ResourceExhausted`** | Exceeded the free-tier requests per minute (RPM) limit. | Wait 60 seconds before generating again. Existing Firebase questions will continue to serve student tests without interruption. |
+| **`Missing GEMINI_API_KEY Error`** | Environment variable not exported in the running shell. | Check status via `GET /api/admin/questions/gemini/status`. Export the variable in the exact terminal launching `mvn spring-boot:run`. |
+| **`Read Timeout / Network Lag`** | High latency or large question batch. | Request 5 or 10 questions at a time rather than 30 in a single request. Gemini processes smaller batches significantly faster. |
+| **`Malformed JSON from Gemini`** | LLM returned markdown decoration or truncation. | The backend's `cleanJsonResponse()` automatically strips ```json blocks and parses cleanly. If persistent, retry generation. |
+
+---
+
+## 🎯 Company Placement Preparation Test Series
+
+### 1. Structure & Sections
+The test series contains four core preparation modules designed to maximize campus placement readiness:
+
+1. **Section 1: Quantitative Aptitude**
+   - **Priority Foundational Topics**: Number System, HCF and LCM, Divisibility Rules, Percentages, Profit and Loss, Discounts.
+   - **Comprehensive Syllabus**: Ratio & Proportion, Averages, Mixtures & Alligation, Simple & Compound Interest, Time & Work, Pipes & Cisterns, Time Speed & Distance, Trains, Boats & Streams, Permutations & Combinations, Probability, Algebra, Mensuration, Data Interpretation.
+2. **Section 2: Logical Reasoning**
+   - Number Series, Letter Series, Pattern Recognition, Coding-Decoding, Blood Relations, Direction Sense, Linear & Circular Seating Arrangements, Syllogisms, Logical Puzzles, Ranking & Order, Calendars, Clocks, Data Sufficiency.
+3. **Section 3: Verbal Ability**
+   - Grammar & Error Spotting, Sentence Correction, Synonyms & Antonyms, Idioms & Phrases, Reading Comprehension, Para Jumbles, Fill in the Blanks.
+4. **Section 4: Technical and Coding**
+   - **Programming Fundamentals**: Core Java Basics, C, Python, Output Prediction, Conditions & Loops, Arrays & Strings.
+   - **Computer Science Fundamentals**: Data Structures & Algorithms, DBMS, SQL Queries, Operating Systems, Computer Networks.
+   - **Coding Practice**: Easy & medium problem solving challenges.
+5. **Full-Length Mock & Company Specific Tests**: TCS NQT, Infosys, Wipro, and Accenture recruitment formats.
+
+### 2. High-Performance In-Memory Question Architecture
+- High-speed in-memory repository (`PlacementQuestionBank`) preloaded with verified questions.
+- Eliminates latency during active test-taking.
+- Full step-by-step mathematical explanations and verified logic for every solution.
+
+### 3. Test Security & Proctoring Guardrails
+- **Mandatory Fullscreen**: Hides browser distractions and prevents multitasking.
+- **Three-Strike Rule**: Debounced detection of window blur, tab switching, and fullscreen exit. Reaching 3 violations triggers automatic auto-submission.
+- **Timer Resilience**: Timer values and answers persist through page reloads and refreshes.
+- **Answer Key Integrity**: Student attempts cannot view answers or solutions until completion and server-side evaluation.
+
+### 4. Admin Management & CSV Import/Export
+- Access route: `/faculty#snjb-management` or `/admin`
+- Full test lifecycle: Create, Edit, Duplicate, Toggle Status (Published/Draft), and Delete tests.
+- Bulk question CSV upload: Supported via Multipart File (`/api/snjb/admin/questions/import-csv`) or JSON string (`/api/snjb/admin/questions/import-csv-text`).
+- Student attempt export: One-click export to CSV (`/api/snjb/admin/export-results`).
+
+### 5. Test Checklist for Student & Admin Workflows
+- [x] **Student Login**: Sign in at `/login.jsp` with student credentials.
+- [x] **Browse Tests**: Open `/tests` or click "Placement Tests" in the sidebar / dashboard.
+- [x] **Launch Topic Test**: Choose any of the 6 foundational topics (e.g., Number System, Percentages).
+- [x] **Proctored Taking**: Enter fullscreen, navigate between questions using question palette, mark for review.
+- [x] **Submit & Score**: Submit test to receive instant score, accuracy, pass status, and step-by-step solution review.
+- [x] **Metric Synchronization**: Updated score syncs to student metrics in Firebase Realtime Database.
+- [x] **Admin Test Management**: Faculty/Admin can access `/faculty#snjb-management` to view active tests, duplicates, and analytics.
+- [x] **CSV Question Import**: Import CSV questions into question bank.
+- [x] **CSV Results Export**: Download batch performance report.
 
 ---
 

@@ -42,8 +42,9 @@
                     </p>
                 </div>
                 <div style="display: flex; gap: 0.75rem; align-items: center;">
-                    <a href="${pageContext.request.contextPath}/tests" class="btn btn-secondary btn-sm">📝 Practice Assessment</a>
-                    <a href="${pageContext.request.contextPath}/resume" class="btn btn-primary btn-sm">📄 Update Resume</a>
+                    <a href="${pageContext.request.contextPath}/tests" class="btn btn-primary btn-sm">📝 Placement Tests</a>
+                    <a href="${pageContext.request.contextPath}/jobs" class="btn btn-secondary btn-sm">💼 Placement Drives</a>
+                    <a href="${pageContext.request.contextPath}/resume" class="btn btn-outline btn-sm">📄 Resume ATS</a>
                     <button type="button" class="btn btn-outline btn-sm" onclick="handleLogout()">🚪 Logout</button>
                 </div>
             </div>
@@ -53,7 +54,7 @@
                 <div style="display: flex; align-items: center; gap: 1rem;">
                     <div class="logo-orb" style="flex-shrink: 0; width: 42px; height: 42px;">🤖</div>
                     <p class="ai-banner-text">
-                        <%= aiWelcome != null ? aiWelcome : "Welcome to TPO Buddy! Complete practice tests to increase your placement readiness score." %>
+                        <%= aiWelcome != null ? aiWelcome : "Welcome to TPO Buddy! Explore active placement drives, optimize your resume ATS, and practice AI mock interviews." %>
                     </p>
                 </div>
                 <a href="${pageContext.request.contextPath}/ai-buddy" class="btn btn-secondary btn-sm" style="flex-shrink: 0;">Chat with AI Buddy →</a>
@@ -83,7 +84,7 @@
                         <div class="badge badge-primary" style="margin-bottom: 0.5rem;"><%= readiness != null ? readiness.status : "Foundation Stage" %></div>
                         <h3 style="font-size: 1.35rem; margin-bottom: 0.5rem;">Placement Readiness</h3>
                         <p style="font-size: 0.875rem; margin: 0; color: var(--text-secondary);">
-                            <%= readiness != null ? readiness.aiSummary : "Complete tests and upload a resume to calculate readiness." %>
+                            <%= readiness != null ? readiness.aiSummary : "Complete your profile, optimize your resume ATS, and prepare for interviews." %>
                         </p>
                     </div>
                 </div>
@@ -157,60 +158,62 @@
                 </div>
 
                 <div class="metric-card">
-                    <div class="metric-label">Completed Tests</div>
-                    <div class="metric-value"><span class="animated-counter"><%= metrics != null ? metrics.getTestsCompleted() : 0 %></span></div>
+                    <div class="metric-label">Placement Drives</div>
+                    <div class="metric-value"><span class="animated-counter"><%= jobs != null ? jobs.size() : 0 %></span></div>
                     <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">
-                        🔥 Consistency Streak: <%= metrics != null ? metrics.getStreakDays() : 0 %> Days
+                        💼 Active campus opportunities
                     </div>
                 </div>
             </div>
 
-            <!-- Two-Column Sections: Recent Tests + Top Jobs -->
+            <!-- Two-Column Sections: Placement Tools + Top Jobs -->
             <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 2rem;">
-                <!-- Recent Test Attempts -->
+                <!-- Career Tools & Quick Hub -->
                 <div class="data-table-card">
                     <div class="data-table-header">
-                        <h3 style="font-size: 1.15rem;">Recent Test Attempts</h3>
-                        <a href="${pageContext.request.contextPath}/tests" style="font-size: 0.85rem; color: var(--secondary);">View All Tests</a>
+                        <h3 style="font-size: 1.15rem;">Placement Acceleration Hub</h3>
+                        <a href="${pageContext.request.contextPath}/progress" style="font-size: 0.85rem; color: var(--secondary);">View Analytics</a>
                     </div>
-                    <div class="table-responsive">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Assessment</th>
-                                    <th>Topic</th>
-                                    <th>Score</th>
-                                    <th>Status</th>
-                                    <th>Date</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <% if (recentTests != null && !recentTests.isEmpty()) {
-                                    for (TestAttempt t : recentTests) { %>
-                                    <tr>
-                                        <td style="font-weight: 600; color: var(--text-primary);"><%= t.getCategory() %></td>
-                                        <td><%= t.getTopic() %></td>
-                                        <td style="font-weight: 700; color: <%= t.isPassed() ? "var(--accent-emerald)" : "var(--accent-amber)" %>;"><%= t.getScore() %>%</td>
-                                        <td>
-                                            <span class="badge <%= t.isPassed() ? "badge-success" : "badge-warning" %>">
-                                                <%= t.isPassed() ? "PASSED" : "NEEDS PRACTICE" %>
-                                            </span>
-                                        </td>
-                                        <td><%= sdf.format(new Date(t.getSavedAt())) %></td>
-                                    </tr>
-                                <%  }
-                                } else { %>
-                                    <tr>
-                                        <td colspan="5" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
-                                            No assessment tests recorded yet.
-                                            <div style="margin-top: 0.75rem;">
-                                                <a href="${pageContext.request.contextPath}/tests" class="btn btn-primary btn-sm">Take First Assessment</a>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                <% } %>
-                            </tbody>
-                        </table>
+                    <div style="padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+                        <a href="${pageContext.request.contextPath}/tests" style="text-decoration: none; background: #eef2ff; border: 1.5px solid #6366f1; border-radius: var(--radius-sm); padding: 1.1rem; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s ease;">
+                            <div>
+                                <div style="font-weight: 700; color: #4338ca; font-size: 0.95rem;">📝 Placement Preparation Test Series</div>
+                                <div style="font-size: 0.85rem; color: #4b5563;">Topic-wise practice (Quant, Logical, Verbal, Tech), sectional tests & company mocks</div>
+                            </div>
+                            <span class="badge badge-primary" style="background: #4f46e5; color: white;">Start Test →</span>
+                        </a>
+
+                        <a href="${pageContext.request.contextPath}/resume" style="text-decoration: none; background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 1.1rem; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s ease;">
+                            <div>
+                                <div style="font-weight: 700; color: var(--text-primary); font-size: 0.95rem;">📄 AI Resume ATS Scanner</div>
+                                <div style="font-size: 0.85rem; color: var(--text-muted);">Get instant ATS score, keyword matching, and section feedback</div>
+                            </div>
+                            <span class="badge badge-primary">Scan Resume →</span>
+                        </a>
+
+                        <a href="${pageContext.request.contextPath}/interview" style="text-decoration: none; background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 1.1rem; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s ease;">
+                            <div>
+                                <div style="font-weight: 700; color: var(--text-primary); font-size: 0.95rem;">🎙️ AI Mock Interview</div>
+                                <div style="font-size: 0.85rem; color: var(--text-muted);">Practice real technical & HR interview questions with instant AI feedback</div>
+                            </div>
+                            <span class="badge badge-success">Start Interview →</span>
+                        </a>
+
+                        <a href="${pageContext.request.contextPath}/ai-buddy" style="text-decoration: none; background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 1.1rem; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s ease;">
+                            <div>
+                                <div style="font-weight: 700; color: var(--text-primary); font-size: 0.95rem;">🤖 Career Copilot AI</div>
+                                <div style="font-size: 0.85rem; color: var(--text-muted);">24/7 placement advisor for salary negotiation, company tips & preparation</div>
+                            </div>
+                            <span class="badge badge-primary">Ask Copilot →</span>
+                        </a>
+
+                        <a href="${pageContext.request.contextPath}/progress" style="text-decoration: none; background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 1.1rem; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s ease;">
+                            <div>
+                                <div style="font-weight: 700; color: var(--text-primary); font-size: 0.95rem;">📊 Skill & Placement Analytics</div>
+                                <div style="font-size: 0.85rem; color: var(--text-muted);">Track competency metrics in Java, DSA, SQL, and quantitative aptitude</div>
+                            </div>
+                            <span class="badge badge-secondary">View Analytics →</span>
+                        </a>
                     </div>
                 </div>
 

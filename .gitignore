@@ -1,21 +1,39 @@
 # ==============================================================================
-# Security & Secret Files (Excluded from Repository)
+# Security, Credentials & Secret Files (Strictly Excluded from Repository)
 # ==============================================================================
 src/main/java/com/tpobuddy/config/SecurityConfig.java
 src/main/java/com/tpobuddy/security/SessionAuthInterceptor.java
 src/main/resources/application.properties
+src/main/resources/application-*.properties
+src/main/resources/application.yml
+src/main/resources/application-*.yml
+src/main/resources/application.yaml
+src/main/resources/application-*.yaml
 firestore.rules
 database.rules.json
+storage.rules
 *.pem
 *.key
 *.p12
+*.pfx
 *.jks
 *.keystore
+*serviceAccount*.json
+*service-account*.json
 serviceAccountKey.json
 google-services.json
+GoogleService-Info.plist
+credentials.json
+client_secret*.json
+secrets.json
+secrets.properties
+*.token
+token.json
 .env
 .env.*
+*.env
 !.env.example
+
 
 # ==============================================================================
 # Maven & Java Build Outputs

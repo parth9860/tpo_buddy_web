@@ -50,30 +50,6 @@ public class AuthController {
     }
 
     /**
-     * One-click demo login for rapid testing in IntelliJ IDEA without external setup.
-     */
-    @RequestMapping(value = "/api/auth/demo", method = {RequestMethod.GET, RequestMethod.POST}, produces = MediaType.APPLICATION_JSON_VALUE)
-    @ResponseBody
-    public ResponseEntity<Map<String, Object>> demoLogin(@RequestParam(value = "role", defaultValue = "student") String role,
-                                                         HttpServletRequest request,
-                                                         HttpServletResponse response) throws IOException {
-        AuthService.AuthResult result = authService.processDemoLogin(role, request);
-        Map<String, Object> body = new HashMap<>();
-        body.put("success", true);
-        body.put("redirect", result.redirect);
-        body.put("role", result.role);
-        body.put("name", result.name);
-
-        // If accessed directly via browser GET link, redirect immediately
-        if ("GET".equalsIgnoreCase(request.getMethod())) {
-            response.sendRedirect(result.redirect);
-            return null;
-        }
-
-        return ResponseEntity.ok(body);
-    }
-
-    /**
      * Handles logout for both AJAX and browser navigation.
      */
     @RequestMapping(value = {"/logout", "/api/auth/logout"}, method = {RequestMethod.GET, RequestMethod.POST})

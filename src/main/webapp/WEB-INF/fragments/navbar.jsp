@@ -9,7 +9,6 @@
         <ul class="nav-links">
             <li><a href="${pageContext.request.contextPath}/#home" class="nav-link">Home</a></li>
             <li><a href="${pageContext.request.contextPath}/#features" class="nav-link">Features</a></li>
-            <li><a href="${pageContext.request.contextPath}/react-portal" class="nav-link" style="color: #6366f1; font-weight: 600;">&#9883; React Portal</a></li>
             <li><a href="${pageContext.request.contextPath}/interview" class="nav-link">AI Interview</a></li>
             <li><a href="${pageContext.request.contextPath}/#about" class="nav-link">About</a></li>
         </ul>

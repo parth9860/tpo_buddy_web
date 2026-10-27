@@ -44,7 +44,7 @@ public class SecurityConfig {
                 .requestMatchers("/jobs", "/jobs.jsp", "/api/jobs/**").permitAll()
                 .requestMatchers("/progress", "/progress.jsp").permitAll()
                 .requestMatchers("/profile", "/profile.jsp").permitAll()
-                .requestMatchers("/faculty", "/faculty-dashboard.jsp", "/api/faculty/**").permitAll()
+                .requestMatchers("/faculty", "/faculty-dashboard.jsp", "/api/faculty/**", "/api/snjb/**").permitAll()
                 .requestMatchers("/admin", "/admin-dashboard.jsp").permitAll()
                 .anyRequest().permitAll()
             );

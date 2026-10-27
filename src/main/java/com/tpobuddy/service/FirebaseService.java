@@ -144,7 +144,7 @@ public class FirebaseService {
                 user.setRole(obj.has("role") ? obj.get("role").getAsString() : "student");
                 user.setBranch(obj.has("branch") ? obj.get("branch").getAsString() : (obj.has("department") ? obj.get("department").getAsString() : "CSE"));
                 user.setYear(obj.has("year") ? obj.get("year").getAsString() : "Final Year");
-                user.setCollege(obj.has("college") ? obj.get("college").getAsString() : "Engineering College");
+                user.setCollege(obj.has("college") ? obj.get("college").getAsString() : "SNJB College of Engineering");
                 user.setCreatedAt(obj.has("createdAt") ? obj.get("createdAt").getAsLong() : System.currentTimeMillis());
                 user.setPhotoUrl(obj.has("photoUrl") ? obj.get("photoUrl").getAsString() : (obj.has("photoURL") ? obj.get("photoURL").getAsString() : ""));
                 user.setAuthProvider(obj.has("authProvider") ? obj.get("authProvider").getAsString() : "password");
@@ -152,6 +152,33 @@ public class FirebaseService {
             } catch (Exception e) {
                 System.err.println("Error parsing user profile for " + uid + ": " + e.getMessage());
             }
+        }
+
+        // Secondary fallback: Cloud Firestore `users/{uid}`
+        if (projectId != null && apiKey != null && !apiKey.isEmpty()) {
+            try {
+                String fsUrl = "https://firestore.googleapis.com/v1/projects/" + projectId 
+                        + "/databases/(default)/documents/users/" + uid + "?key=" + apiKey;
+                String fsResponse = executeHttpRequest(fsUrl, "GET", null);
+                if (fsResponse != null && !fsResponse.contains("error") && fsResponse.contains("fields")) {
+                    JsonObject fsDoc = JsonParser.parseString(fsResponse).getAsJsonObject();
+                    if (fsDoc.has("fields")) {
+                        JsonObject fields = fsDoc.getAsJsonObject("fields");
+                        User user = new User();
+                        user.setUid(uid);
+                        user.setName(getFsString(fields, "name", "Student"));
+                        user.setEmail(getFsString(fields, "email", ""));
+                        user.setRole(getFsString(fields, "role", "student"));
+                        user.setBranch(getFsString(fields, "branch", "CSE"));
+                        user.setYear(getFsString(fields, "year", "Final Year"));
+                        user.setCollege(getFsString(fields, "college", "SNJB College of Engineering"));
+                        user.setPhotoUrl(getFsString(fields, "photoUrl", ""));
+                        user.setAuthProvider(getFsString(fields, "authProvider", "password"));
+                        user.setCreatedAt(System.currentTimeMillis());
+                        return user;
+                    }
+                }
+            } catch (Exception ignored) {}
         }
 
         return null;
@@ -180,7 +207,58 @@ public class FirebaseService {
         }
 
         String response = executeHttpRequest(url, "PUT", json.toString());
+
+        // Also asynchronously sync to Firestore `users/{uid}` in fail-safe mode
+        saveFirestoreUserProfile(user);
+
         return response != null;
+    }
+
+    private void saveFirestoreUserProfile(User user) {
+        if (user == null || user.getUid() == null || projectId == null || apiKey == null || apiKey.isEmpty()) return;
+        try {
+            JsonObject fields = new JsonObject();
+            fields.add("uid", makeStringField(user.getUid()));
+            fields.add("id", makeStringField(user.getUid()));
+            fields.add("name", makeStringField(user.getName() != null ? user.getName() : "Student"));
+            fields.add("displayName", makeStringField(user.getName() != null ? user.getName() : "Student"));
+            fields.add("email", makeStringField(user.getEmail() != null ? user.getEmail() : ""));
+            fields.add("role", makeStringField(user.getRole() != null ? user.getRole() : "student"));
+            fields.add("branch", makeStringField(user.getBranch() != null ? user.getBranch() : "CSE"));
+            fields.add("year", makeStringField(user.getYear() != null ? user.getYear() : "Final Year"));
+            fields.add("college", makeStringField(user.getCollege() != null ? user.getCollege() : "SNJB College of Engineering"));
+            fields.add("authProvider", makeStringField(user.getAuthProvider() != null ? user.getAuthProvider() : "password"));
+            fields.add("numericId", makeIntegerField(user.getNumericId()));
+            fields.add("createdAt", makeIntegerField(user.getCreatedAt() > 0 ? user.getCreatedAt() : System.currentTimeMillis()));
+            if (user.getPhotoUrl() != null && !user.getPhotoUrl().isEmpty()) {
+                fields.add("photoUrl", makeStringField(user.getPhotoUrl()));
+            }
+
+            StringBuilder maskParams = new StringBuilder();
+            for (String fieldName : fields.keySet()) {
+                maskParams.append("&updateMask.fieldPaths=").append(fieldName);
+            }
+
+            String firestoreUrl = "https://firestore.googleapis.com/v1/projects/" + projectId 
+                    + "/databases/(default)/documents/users/" + user.getUid() 
+                    + "?key=" + apiKey + maskParams.toString();
+
+            JsonObject body = new JsonObject();
+            body.add("fields", fields);
+
+            executeHttpRequest(firestoreUrl, "PATCH", body.toString());
+        } catch (Exception ignored) {
+            // Fail-safe: Realtime Database is primary active store
+        }
+    }
+
+    private String getFsString(JsonObject fields, String key, String defVal) {
+        if (fields == null || !fields.has(key)) return defVal;
+        try {
+            JsonObject f = fields.getAsJsonObject(key);
+            if (f.has("stringValue")) return f.get("stringValue").getAsString();
+        } catch (Exception ignored) {}
+        return defVal;
     }
 
     public List<User> fetchAllUsers() {
@@ -402,6 +480,38 @@ public class FirebaseService {
         }
     }
 
+    public boolean saveQuestion(Question q) {
+        if (q == null) return false;
+        if (q.getId() <= 0) {
+            q.setId((int) (System.currentTimeMillis() % 10000000) + 1000);
+        }
+        String url = databaseUrl + "/questions/" + q.getId() + ".json";
+        JsonObject obj = new JsonObject();
+        obj.addProperty("id", q.getId());
+        obj.addProperty("category", q.getCategory() != null ? q.getCategory() : "Technical");
+        obj.addProperty("topic", q.getTopic() != null ? q.getTopic() : "General");
+        obj.addProperty("difficulty", q.getDifficulty() != null ? q.getDifficulty() : "Medium");
+        obj.addProperty("question", q.getQuestion() != null ? q.getQuestion() : "");
+        obj.addProperty("optionA", q.getOptionA() != null ? q.getOptionA() : "");
+        obj.addProperty("optionB", q.getOptionB() != null ? q.getOptionB() : "");
+        obj.addProperty("optionC", q.getOptionC() != null ? q.getOptionC() : "");
+        obj.addProperty("optionD", q.getOptionD() != null ? q.getOptionD() : "");
+        obj.addProperty("correctOption", q.getCorrectOption());
+        obj.addProperty("explanation", q.getExplanation() != null ? q.getExplanation() : "");
+        obj.addProperty("marks", q.getMarks() > 0 ? q.getMarks() : 2);
+        String res = executeHttpRequest(url, "PUT", obj.toString());
+        return res != null && !res.isEmpty();
+    }
+
+    public int saveQuestions(List<Question> questions) {
+        if (questions == null || questions.isEmpty()) return 0;
+        int count = 0;
+        for (Question q : questions) {
+            if (saveQuestion(q)) count++;
+        }
+        return count;
+    }
+
     // =========================================================================
     // Realtime Database: Campus Events & Drives (`events`)
     // =========================================================================
@@ -560,6 +670,18 @@ public class FirebaseService {
         json.addProperty("monitoringEventsJson", attempt.getMonitoringEventsJson() != null ? attempt.getMonitoringEventsJson() : "[]");
         json.addProperty("proctoringStatus", attempt.getProctoringStatus() != null ? attempt.getProctoringStatus() : "VALIDATED");
         json.addProperty("reviewNotes", attempt.getReviewNotes() != null ? attempt.getReviewNotes() : "");
+        json.addProperty("testTitle", attempt.getTestTitle());
+        json.addProperty("marksEarned", attempt.getMarksEarned());
+        json.addProperty("maxMarks", attempt.getMaxMarks());
+        json.addProperty("incorrectAnswers", attempt.getIncorrectAnswers());
+        json.addProperty("unansweredCount", attempt.getUnansweredCount());
+        json.addProperty("timeTakenSeconds", attempt.getTimeTakenSeconds());
+        json.addProperty("accuracyPercentage", attempt.getAccuracyPercentage());
+        json.addProperty("negativeMarkingApplied", attempt.isNegativeMarkingApplied());
+        json.addProperty("negativeMarksDeducted", attempt.getNegativeMarksDeducted());
+        json.addProperty("sectionBreakdownJson", attempt.getSectionBreakdownJson());
+        json.addProperty("weakTopicsJson", attempt.getWeakTopicsJson());
+        json.addProperty("recommendedPractice", attempt.getRecommendedPractice());
 
         String userUrl = databaseUrl + "/test_attempts/" + uid + "/" + attemptId + ".json";
         String globalUrl = databaseUrl + "/all_test_attempts/" + attemptId + ".json";
@@ -675,9 +797,6 @@ public class FirebaseService {
     private void saveFirestoreTestAttempt(String attemptId, TestAttempt attempt) {
         if (attemptId == null || attempt == null) return;
         try {
-            String firestoreUrl = "https://firestore.googleapis.com/v1/projects/" + projectId 
-                    + "/databases/(default)/documents/test_attempts/" + attemptId + "?key=" + apiKey;
-
             JsonObject fields = new JsonObject();
             fields.add("attemptId", makeStringField(attemptId));
             fields.add("id", makeStringField(attemptId));
@@ -705,12 +824,21 @@ public class FirebaseService {
             fields.add("cameraDisconnectCount", makeIntegerField(attempt.getCameraDisconnectCount()));
             fields.add("copyPasteCount", makeIntegerField(attempt.getCopyPasteCount()));
 
+            StringBuilder maskParams = new StringBuilder();
+            for (String fieldName : fields.keySet()) {
+                maskParams.append("&updateMask.fieldPaths=").append(fieldName);
+            }
+
+            String firestoreUrl = "https://firestore.googleapis.com/v1/projects/" + projectId 
+                    + "/databases/(default)/documents/test_attempts/" + attemptId 
+                    + "?key=" + apiKey + maskParams.toString();
+
             JsonObject body = new JsonObject();
             body.add("fields", fields);
 
             executeHttpRequest(firestoreUrl, "PATCH", body.toString());
         } catch (Exception e) {
-            System.err.println("Firestore test attempt sync note: " + e.getMessage());
+            // Quiet fallback: attempt is already securely saved in Firebase Realtime Database
         }
     }
 
@@ -763,6 +891,28 @@ public class FirebaseService {
         t.setMonitoringEventsJson(getString(obj, "monitoringEventsJson", "[]"));
         t.setProctoringStatus(getString(obj, "proctoringStatus", "VALIDATED"));
         t.setReviewNotes(getString(obj, "reviewNotes", ""));
+        t.setTestTitle(getString(obj, "testTitle", t.getCategory()));
+        if (obj.has("marksEarned")) {
+            try { t.setMarksEarned(obj.get("marksEarned").getAsDouble()); } catch (Exception ignored) {}
+        }
+        if (obj.has("maxMarks")) {
+            try { t.setMaxMarks(obj.get("maxMarks").getAsDouble()); } catch (Exception ignored) {}
+        }
+        t.setIncorrectAnswers(getInt(obj, "incorrectAnswers", 0));
+        t.setUnansweredCount(getInt(obj, "unansweredCount", 0));
+        if (obj.has("timeTakenSeconds")) {
+            try { t.setTimeTakenSeconds(obj.get("timeTakenSeconds").getAsLong()); } catch (Exception ignored) {}
+        }
+        if (obj.has("accuracyPercentage")) {
+            try { t.setAccuracyPercentage(obj.get("accuracyPercentage").getAsDouble()); } catch (Exception ignored) {}
+        }
+        t.setNegativeMarkingApplied(obj.has("negativeMarkingApplied") && obj.get("negativeMarkingApplied").getAsBoolean());
+        if (obj.has("negativeMarksDeducted")) {
+            try { t.setNegativeMarksDeducted(obj.get("negativeMarksDeducted").getAsDouble()); } catch (Exception ignored) {}
+        }
+        t.setSectionBreakdownJson(getString(obj, "sectionBreakdownJson", "{}"));
+        t.setWeakTopicsJson(getString(obj, "weakTopicsJson", "[]"));
+        t.setRecommendedPractice(getString(obj, "recommendedPractice", ""));
         return t;
     }
 
@@ -941,10 +1091,14 @@ public class FirebaseService {
             if (status >= 200 && status < 300) {
                 return response.body();
             } else {
-                System.err.println("HTTP " + method + " " + urlStr + " returned status " + status);
+                if (!urlStr.contains("firestore.googleapis.com")) {
+                    System.err.println("HTTP " + method + " " + urlStr + " returned status " + status);
+                }
             }
         } catch (Exception e) {
-            System.err.println("HTTP " + method + " exception for " + urlStr + ": " + e.getMessage());
+            if (!urlStr.contains("firestore.googleapis.com")) {
+                System.err.println("HTTP " + method + " exception for " + urlStr + ": " + e.getMessage());
+            }
         }
         return null;
     }

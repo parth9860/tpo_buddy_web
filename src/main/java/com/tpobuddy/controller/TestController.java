@@ -1,14 +1,21 @@
 package com.tpobuddy.controller;
 
-import com.google.gson.*;
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.tpobuddy.model.PlacementTest;
 import com.tpobuddy.model.Question;
+import com.tpobuddy.model.StudentMetrics;
 import com.tpobuddy.model.TestAttempt;
 import com.tpobuddy.model.User;
 import com.tpobuddy.service.FirebaseService;
-import com.tpobuddy.service.TestQuestionBank;
+import com.tpobuddy.service.PlacementQuestionBank;
+import com.tpobuddy.service.PlacementTestService;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -16,49 +23,62 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Spring MVC / REST Controller managing Tests, Assessments, Mock Examinations,
- * Proctoring Attempt Lifecycle, Three-Strike Security Violations, Answer scoring,
- * Anti-cheating Risk Scoring, and Firebase Attempt synchronization.
+ * Controller managing the Company Placement Preparation Test Series for students.
+ * Features:
+ * - Standardized Sectional, Topic-wise, and Full Mock Placement Tests
+ * - Sub-millisecond question retrieval
+ * - Anti-cheating fullscreen and tab-switch monitoring
+ * - Session state resilience across page reloads
+ * - Secure server-side grading and step-by-step solution explanations
+ * - Real-time synchronization with Firebase student profiles
  */
 @Controller
 public class TestController {
 
     private final FirebaseService firebaseService;
+    private final PlacementTestService placementTestService;
 
-    public TestController(FirebaseService firebaseService) {
+    // Active session tracking: key = userId, value = ActiveExamSession
+    private static final Map<String, ActiveExamSession> ACTIVE_SESSIONS = new ConcurrentHashMap<>();
+
+    public TestController(FirebaseService firebaseService, PlacementTestService placementTestService) {
         this.firebaseService = firebaseService;
+        this.placementTestService = placementTestService;
     }
 
     public static class ActiveExamSession {
         public String attemptId;
         public String userId;
-        public String studentName;
         public String category;
         public String topic;
+        public String testId;
+        public List<Integer> assignedQuestionIds = new ArrayList<>();
+        public Map<Integer, Integer> savedAnswers = new ConcurrentHashMap<>();
+        public Set<Integer> markedForReview = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        public List<JsonObject> monitoringEvents = Collections.synchronizedList(new ArrayList<>());
+        public int violationCount = 0;
         public long startTime;
         public int durationSeconds;
         public long deadline;
-        public List<Integer> assignedQuestionIds = new ArrayList<>();
-        public Map<Integer, Integer> savedAnswers = new HashMap<>();
-        public List<JsonObject> monitoringEvents = new ArrayList<>();
-        public int violationCount = 0;
-        public String status = "in_progress";
-        public String submissionReason = null;
-        public long submissionTime = 0;
-        public int currentQuestionIndex = 0;
         public boolean submitted = false;
         public int finalScore = 0;
         public int correctCount = 0;
         public int riskScore = 0;
         public String riskLevel = "LOW";
+        public String status = "in_progress";
+        public String submissionReason = "manual";
+        public long submissionTime = 0;
+        public int negativeMarking = 0; // 0 = false, 1 = true
+        public double negativeMarks = 0.5;
     }
 
-    private static final Map<String, ActiveExamSession> ACTIVE_SESSIONS = new ConcurrentHashMap<>();
+    // =========================================================================
+    // View Endpoint
+    // =========================================================================
 
     @GetMapping({"/tests", "/tests.jsp"})
     public String viewTests(HttpServletRequest request, Model model) {
@@ -69,33 +89,29 @@ public class TestController {
         }
 
         List<TestAttempt> attempts = firebaseService.fetchTestAttempts(user.getUid());
+        List<PlacementTest> availableTests = placementTestService.getAllTests();
+
         model.addAttribute("user", user);
-        model.addAttribute("attempts", attempts);
+        model.addAttribute("attempts", attempts != null ? attempts : Collections.emptyList());
+        model.addAttribute("availableTests", availableTests);
+        model.addAttribute("categories", PlacementQuestionBank.getCategoriesMetadata());
+        model.addAttribute("totalQuestionBankSize", PlacementQuestionBank.getTotalQuestionCount());
+
         return "tests";
     }
 
-    @GetMapping(value = "/api/tests/questions", produces = MediaType.APPLICATION_JSON_VALUE)
-    @ResponseBody
-    public String getQuestions(
-            @RequestParam(value = "category", required = false) String category,
-            @RequestParam(value = "count", defaultValue = "25") int count) {
+    // =========================================================================
+    // REST APIs for Test Engine
+    // =========================================================================
 
-        List<Question> questions = TestQuestionBank.getQuestions(category, count);
-        JsonArray arr = new JsonArray();
-        for (Question q : questions) {
-            JsonObject obj = new JsonObject();
-            obj.addProperty("id", q.getId());
-            obj.addProperty("category", q.getCategory());
-            obj.addProperty("topic", q.getTopic());
-            obj.addProperty("difficulty", q.getDifficulty());
-            obj.addProperty("question", q.getQuestion());
-            obj.addProperty("optionA", q.getOptionA());
-            obj.addProperty("optionB", q.getOptionB());
-            obj.addProperty("optionC", q.getOptionC());
-            obj.addProperty("optionD", q.getOptionD());
-            arr.add(obj);
-        }
-        return arr.toString();
+    @GetMapping(value = "/api/tests/categories", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<String> getCategories() {
+        JsonObject resp = new JsonObject();
+        resp.addProperty("success", true);
+        resp.add("categories", new Gson().toJsonTree(PlacementQuestionBank.getCategoriesMetadata()));
+        resp.addProperty("totalQuestionCount", PlacementQuestionBank.getTotalQuestionCount());
+        return ResponseEntity.ok(resp.toString());
     }
 
     @GetMapping(value = "/api/tests/active-session", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -104,185 +120,120 @@ public class TestController {
         HttpSession session = request.getSession(false);
         User user = (session != null) ? (User) session.getAttribute("currentUser") : null;
         if (user == null) {
-            return ResponseEntity.status(HttpServletResponse.SC_UNAUTHORIZED)
-                    .body("{\"success\":false,\"error\":\"Authentication required\"}");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("{\"hasActiveSession\":false}");
+        }
+
+        ActiveExamSession examSession = ACTIVE_SESSIONS.get(user.getUid());
+        if (examSession == null || examSession.submitted) {
+            return ResponseEntity.ok("{\"hasActiveSession\":false}");
         }
 
         long now = System.currentTimeMillis();
-        ActiveExamSession active = null;
-
-        for (ActiveExamSession s : ACTIVE_SESSIONS.values()) {
-            if (s.userId.equals(user.getUid()) && !s.submitted && now < s.deadline) {
-                active = s;
-                break;
-            }
+        long remaining = Math.max(0, (examSession.deadline - now) / 1000);
+        if (remaining <= 0) {
+            // Auto submit if expired
+            JsonObject autoSubmit = new JsonObject();
+            autoSubmit.addProperty("attemptId", examSession.attemptId);
+            autoSubmit.addProperty("submissionReason", "timeout");
+            return submitExam(autoSubmit.toString(), request);
         }
 
-        if (active == null) {
-            List<TestAttempt> userAttempts = firebaseService.fetchTestAttempts(user.getUid());
-            if (userAttempts != null && !userAttempts.isEmpty()) {
-                TestAttempt latest = userAttempts.get(0);
-                if ("in_progress".equalsIgnoreCase(latest.getStatus()) && latest.getDeadline() > now) {
-                    active = new ActiveExamSession();
-                    active.attemptId = latest.getId();
-                    active.userId = latest.getUserId();
-                    active.studentName = latest.getStudentName();
-                    active.category = latest.getCategory();
-                    active.topic = latest.getTopic();
-                    active.startTime = latest.getStartTime();
-                    active.durationSeconds = latest.getDurationSeconds();
-                    active.deadline = latest.getDeadline();
-                    active.violationCount = latest.getViolationCount();
-                    active.status = "in_progress";
-                    active.currentQuestionIndex = latest.getCurrentQuestionIndex();
+        JsonObject resp = new JsonObject();
+        resp.addProperty("hasActiveSession", true);
+        resp.addProperty("attemptId", examSession.attemptId);
+        resp.addProperty("category", examSession.category);
+        resp.addProperty("topic", examSession.topic);
+        resp.addProperty("testId", examSession.testId);
+        resp.addProperty("remainingSeconds", remaining);
+        resp.addProperty("violationCount", examSession.violationCount);
+        resp.addProperty("questionCount", examSession.assignedQuestionIds.size());
+        resp.add("savedAnswers", new Gson().toJsonTree(examSession.savedAnswers));
 
-                    List<Question> qList = TestQuestionBank.getQuestions(latest.getCategory(), latest.getTotalQuestions());
-                    for (Question q : qList) {
-                        active.assignedQuestionIds.add(q.getId());
-                    }
-
-                    try {
-                        if (latest.getSavedAnswersJson() != null && !latest.getSavedAnswersJson().isEmpty()) {
-                            JsonObject obj = JsonParser.parseString(latest.getSavedAnswersJson()).getAsJsonObject();
-                            for (Map.Entry<String, JsonElement> entry : obj.entrySet()) {
-                                active.savedAnswers.put(Integer.parseInt(entry.getKey()), entry.getValue().getAsInt());
-                            }
-                        }
-                    } catch (Exception ignored) {}
-
-                    ACTIVE_SESSIONS.put(active.attemptId, active);
-                }
+        // Return sanitized questions without answers
+        JsonArray qArr = new JsonArray();
+        for (int qId : examSession.assignedQuestionIds) {
+            Question q = PlacementQuestionBank.getQuestionById(qId);
+            if (q != null) {
+                JsonObject qObj = new JsonObject();
+                qObj.addProperty("id", q.getId());
+                qObj.addProperty("category", q.getCategory());
+                qObj.addProperty("topic", q.getTopic());
+                qObj.addProperty("difficulty", q.getDifficulty());
+                qObj.addProperty("question", q.getQuestion());
+                qObj.addProperty("optionA", q.getOptionA());
+                qObj.addProperty("optionB", q.getOptionB());
+                qObj.addProperty("optionC", q.getOptionC());
+                qObj.addProperty("optionD", q.getOptionD());
+                qObj.addProperty("marks", q.getMarks());
+                qArr.add(qObj);
             }
         }
+        resp.add("questions", qArr);
 
-        JsonObject response = new JsonObject();
-        if (active != null) {
-            response.addProperty("success", true);
-            response.addProperty("hasActiveSession", true);
-            response.addProperty("attemptId", active.attemptId);
-            response.addProperty("category", active.category);
-            response.addProperty("durationSeconds", active.durationSeconds);
-            int remaining = Math.max(0, (int) ((active.deadline - now) / 1000L));
-            response.addProperty("remainingSeconds", remaining);
-            response.addProperty("deadline", active.deadline);
-            response.addProperty("violationCount", active.violationCount);
-            response.addProperty("currentQuestionIndex", active.currentQuestionIndex);
-            response.addProperty("status", active.status);
-
-            JsonArray sanitizedQuestions = new JsonArray();
-            for (int qId : active.assignedQuestionIds) {
-                Question q = TestQuestionBank.getQuestionById(qId);
-                if (q != null) {
-                    JsonObject qObj = new JsonObject();
-                    qObj.addProperty("id", q.getId());
-                    qObj.addProperty("category", q.getCategory());
-                    qObj.addProperty("topic", q.getTopic());
-                    qObj.addProperty("difficulty", q.getDifficulty());
-                    qObj.addProperty("question", q.getQuestion());
-                    qObj.addProperty("optionA", q.getOptionA());
-                    qObj.addProperty("optionB", q.getOptionB());
-                    qObj.addProperty("optionC", q.getOptionC());
-                    qObj.addProperty("optionD", q.getOptionD());
-                    sanitizedQuestions.add(qObj);
-                }
-            }
-            response.add("questions", sanitizedQuestions);
-
-            JsonObject savedAnsJson = new JsonObject();
-            for (Map.Entry<Integer, Integer> e : active.savedAnswers.entrySet()) {
-                savedAnsJson.addProperty(String.valueOf(e.getKey()), e.getValue());
-            }
-            response.add("savedAnswers", savedAnsJson);
-        } else {
-            response.addProperty("success", true);
-            response.addProperty("hasActiveSession", false);
-        }
-
-        return ResponseEntity.ok(response.toString());
+        return ResponseEntity.ok(resp.toString());
     }
 
     @PostMapping(value = "/api/tests/start", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
-    public ResponseEntity<String> startExam(HttpServletRequest request) throws IOException {
+    public ResponseEntity<String> startTest(@RequestBody String body, HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         User user = (session != null) ? (User) session.getAttribute("currentUser") : null;
         if (user == null) {
-            return ResponseEntity.status(HttpServletResponse.SC_UNAUTHORIZED)
-                    .body("{\"success\":false,\"error\":\"Authentication required\"}");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("{\"success\":false,\"error\":\"Authentication required\"}");
         }
 
-        long now = System.currentTimeMillis();
+        JsonObject payload = JsonParser.parseString(body).getAsJsonObject();
+        String category = payload.has("category") ? payload.get("category").getAsString() : "Quantitative Aptitude";
+        String topic = payload.has("topic") ? payload.get("topic").getAsString() : null;
+        String testId = payload.has("testId") ? payload.get("testId").getAsString() : null;
+        int count = payload.has("count") ? payload.get("count").getAsInt() : 25;
 
-        for (ActiveExamSession s : ACTIVE_SESSIONS.values()) {
-            if (s.userId.equals(user.getUid()) && !s.submitted && now < s.deadline) {
-                JsonObject response = new JsonObject();
-                response.addProperty("success", true);
-                response.addProperty("attemptId", s.attemptId);
-                response.addProperty("resumed", true);
-                response.addProperty("durationSeconds", s.durationSeconds);
-                response.addProperty("remainingSeconds", Math.max(0, (int) ((s.deadline - now) / 1000L)));
-                response.addProperty("deadline", s.deadline);
-                response.addProperty("category", s.category);
-                response.addProperty("violationCount", s.violationCount);
-                response.addProperty("questionCount", s.assignedQuestionIds.size());
-
-                JsonArray sanitizedQuestions = new JsonArray();
-                for (int qId : s.assignedQuestionIds) {
-                    Question q = TestQuestionBank.getQuestionById(qId);
-                    if (q != null) {
-                        JsonObject qObj = new JsonObject();
-                        qObj.addProperty("id", q.getId());
-                        qObj.addProperty("category", q.getCategory());
-                        qObj.addProperty("topic", q.getTopic());
-                        qObj.addProperty("difficulty", q.getDifficulty());
-                        qObj.addProperty("question", q.getQuestion());
-                        qObj.addProperty("optionA", q.getOptionA());
-                        qObj.addProperty("optionB", q.getOptionB());
-                        qObj.addProperty("optionC", q.getOptionC());
-                        qObj.addProperty("optionD", q.getOptionD());
-                        sanitizedQuestions.add(qObj);
-                    }
-                }
-                response.add("questions", sanitizedQuestions);
-
-                JsonObject savedAnsJson = new JsonObject();
-                for (Map.Entry<Integer, Integer> e : s.savedAnswers.entrySet()) {
-                    savedAnsJson.addProperty(String.valueOf(e.getKey()), e.getValue());
-                }
-                response.add("savedAnswers", savedAnsJson);
-
-                return ResponseEntity.ok(response.toString());
+        PlacementTest pTest = (testId != null) ? placementTestService.getTestById(testId) : null;
+        if (pTest != null) {
+            category = pTest.getCategory();
+            if (pTest.getSubCategory() != null && !"Comprehensive".equalsIgnoreCase(pTest.getSubCategory()) && !"Full Mock".equalsIgnoreCase(pTest.getSubCategory())) {
+                topic = pTest.getSubCategory();
             }
+            count = pTest.getQuestionCount();
         }
 
-        JsonObject body = parseRequestBody(request);
-        String category = (body != null && body.has("category")) ? body.get("category").getAsString() : "Technical";
-        int count = 25;
-        if (body != null && body.has("count")) {
-            try { count = body.get("count").getAsInt(); } catch (Exception ignored) {}
+        List<Question> questions;
+        if (topic != null && !topic.trim().isEmpty() && !"all".equalsIgnoreCase(topic) && !"comprehensive".equalsIgnoreCase(topic)) {
+            questions = PlacementQuestionBank.getQuestionsForTopic(topic, count);
+        } else if ("all".equalsIgnoreCase(category) || "Comprehensive Mock".equalsIgnoreCase(category) || "Company Mock".equalsIgnoreCase(category)) {
+            questions = PlacementQuestionBank.getMixedMockQuestions(count);
+        } else {
+            questions = PlacementQuestionBank.getQuestionsForCategory(category, count);
         }
 
-        int durationSeconds = Math.min(1500, Math.max(300, count * 60));
-        long deadline = now + (durationSeconds * 1000L);
-        String attemptId = UUID.randomUUID().toString();
+        if (questions == null || questions.isEmpty()) {
+            questions = PlacementQuestionBank.getMixedMockQuestions(count);
+        }
 
-        List<Question> questions = TestQuestionBank.getQuestions(category, count);
+        String attemptId = "att_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        long now = System.currentTimeMillis();
+        int durationMins = (pTest != null) ? pTest.getDurationMinutes() : (count <= 10 ? 15 : 30);
+        int durationSecs = durationMins * 60;
+        long deadline = now + (durationSecs * 1000L);
+
         ActiveExamSession examSession = new ActiveExamSession();
         examSession.attemptId = attemptId;
         examSession.userId = user.getUid();
-        examSession.studentName = user.getName();
         examSession.category = category;
-        examSession.topic = "Comprehensive Assessment";
+        examSession.topic = (topic != null) ? topic : "General Assessment";
+        examSession.testId = (testId != null) ? testId : "test_" + category.toLowerCase().replace(" ", "_");
         examSession.startTime = now;
-        examSession.durationSeconds = durationSeconds;
+        examSession.durationSeconds = durationSecs;
         examSession.deadline = deadline;
-        examSession.violationCount = 0;
-        examSession.status = "in_progress";
-        examSession.currentQuestionIndex = 0;
+        if (pTest != null && pTest.isNegativeMarking()) {
+            examSession.negativeMarking = 1;
+            examSession.negativeMarks = pTest.getNegativeMarks();
+        }
 
         JsonArray sanitizedQuestions = new JsonArray();
         for (Question q : questions) {
             examSession.assignedQuestionIds.add(q.getId());
+
             JsonObject qObj = new JsonObject();
             qObj.addProperty("id", q.getId());
             qObj.addProperty("category", q.getCategory());
@@ -293,278 +244,102 @@ public class TestController {
             qObj.addProperty("optionB", q.getOptionB());
             qObj.addProperty("optionC", q.getOptionC());
             qObj.addProperty("optionD", q.getOptionD());
+            qObj.addProperty("marks", q.getMarks());
             sanitizedQuestions.add(qObj);
         }
 
-        ACTIVE_SESSIONS.put(attemptId, examSession);
+        ACTIVE_SESSIONS.put(user.getUid(), examSession);
 
-        TestAttempt initialAttempt = new TestAttempt();
-        initialAttempt.setId(attemptId);
-        initialAttempt.setTestId(category);
-        initialAttempt.setUserId(user.getUid());
-        initialAttempt.setStudentName(user.getName());
-        initialAttempt.setCategory(category);
-        initialAttempt.setTopic("Comprehensive Assessment");
-        initialAttempt.setStartTime(now);
-        initialAttempt.setSavedAt(now);
-        initialAttempt.setDurationSeconds(durationSeconds);
-        initialAttempt.setDeadline(deadline);
-        initialAttempt.setStatus("in_progress");
-        initialAttempt.setSubmissionReason("in_progress");
-        initialAttempt.setViolationCount(0);
-        initialAttempt.setTotalQuestions(sanitizedQuestions.size());
-        firebaseService.saveTestAttempt(user.getUid(), initialAttempt);
+        JsonObject resp = new JsonObject();
+        resp.addProperty("success", true);
+        resp.addProperty("attemptId", attemptId);
+        resp.addProperty("category", examSession.category);
+        resp.addProperty("topic", examSession.topic);
+        resp.addProperty("durationSeconds", durationSecs);
+        resp.addProperty("deadline", deadline);
+        resp.addProperty("questionCount", sanitizedQuestions.size());
+        resp.add("questions", sanitizedQuestions);
 
-        JsonObject response = new JsonObject();
-        response.addProperty("success", true);
-        response.addProperty("attemptId", attemptId);
-        response.addProperty("durationSeconds", durationSeconds);
-        response.addProperty("remainingSeconds", durationSeconds);
-        response.addProperty("deadline", deadline);
-        response.addProperty("category", category);
-        response.addProperty("violationCount", 0);
-        response.addProperty("questionCount", sanitizedQuestions.size());
-        response.add("questions", sanitizedQuestions);
-
-        return ResponseEntity.ok(response.toString());
-    }
-
-    @PostMapping(value = "/api/tests/log-event", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    @ResponseBody
-    public ResponseEntity<String> logEvent(HttpServletRequest request) {
-        HttpSession session = request.getSession(false);
-        User user = (session != null) ? (User) session.getAttribute("currentUser") : null;
-        if (user == null) {
-            return ResponseEntity.status(HttpServletResponse.SC_UNAUTHORIZED)
-                    .body("{\"success\":false,\"error\":\"Unauthorized\"}");
-        }
-
-        JsonObject body = parseRequestBody(request);
-        if (body == null || !body.has("attemptId")) {
-            return ResponseEntity.badRequest().body("{\"success\":false,\"error\":\"Missing attemptId\"}");
-        }
-
-        String attemptId = body.get("attemptId").getAsString();
-        ActiveExamSession examSession = ACTIVE_SESSIONS.get(attemptId);
-        if (examSession == null || !examSession.userId.equals(user.getUid())) {
-            return ResponseEntity.status(HttpServletResponse.SC_FORBIDDEN)
-                    .body("{\"success\":false,\"error\":\"Exam attempt not found or unauthorized\"}");
-        }
-
-        String type = body.has("type") ? body.get("type").getAsString() : "UNKNOWN";
-        String details = body.has("details") ? body.get("details").getAsString() : "";
-        long now = System.currentTimeMillis();
-
-        JsonObject event = new JsonObject();
-        event.addProperty("type", type);
-        event.addProperty("details", details);
-        event.addProperty("timestamp", now);
-        examSession.monitoringEvents.add(event);
-
-        boolean isSecurityViolation = "FULLSCREEN_EXIT".equalsIgnoreCase(type)
-                || "FOCUS_LOST".equalsIgnoreCase(type)
-                || "TAB_SWITCH".equalsIgnoreCase(type)
-                || "WINDOW_BLUR".equalsIgnoreCase(type);
-
-        if (isSecurityViolation && !examSession.submitted) {
-            if (body.has("violationCount")) {
-                int clientCount = body.get("violationCount").getAsInt();
-                examSession.violationCount = Math.max(examSession.violationCount + 1, clientCount);
-            } else {
-                examSession.violationCount++;
-            }
-
-            // Three-Strike rule: auto-submits on the 3rd violation
-            if (examSession.violationCount >= 3) {
-                examSession.submitted = true;
-                examSession.status = "auto_submitted_security";
-                examSession.submissionReason = "automatic-security-submission";
-                examSession.submissionTime = now;
-
-                int totalQuestions = !examSession.assignedQuestionIds.isEmpty() ? examSession.assignedQuestionIds.size() : 25;
-                int correctCount = 0;
-                JsonArray reviews = new JsonArray();
-
-                for (int qId : examSession.assignedQuestionIds) {
-                    Question q = TestQuestionBank.getQuestionById(qId);
-                    if (q != null) {
-                        Integer userAns = examSession.savedAnswers.get(qId);
-                        boolean isCorrect = (userAns != null && userAns == q.getCorrectOption());
-                        if (isCorrect) correctCount++;
-
-                        JsonObject r = new JsonObject();
-                        r.addProperty("questionId", qId);
-                        r.addProperty("question", q.getQuestion());
-                        r.addProperty("selectedOption", (userAns != null) ? userAns : -1);
-                        r.addProperty("correctOption", q.getCorrectOption());
-                        r.addProperty("isCorrect", isCorrect);
-                        r.addProperty("explanation", q.getExplanation());
-                        reviews.add(r);
-                    }
-                }
-
-                int scorePercent = Math.round((correctCount * 100.0f) / totalQuestions);
-                boolean passed = scorePercent >= 60;
-                examSession.finalScore = scorePercent;
-                examSession.correctCount = correctCount;
-                examSession.riskScore = 100;
-                examSession.riskLevel = "HIGH";
-
-                TestAttempt attempt = new TestAttempt();
-                attempt.setId(examSession.attemptId);
-                attempt.setTestId(examSession.category);
-                attempt.setUserId(user.getUid());
-                attempt.setStudentName(user.getName());
-                attempt.setCategory(examSession.category);
-                attempt.setTopic(examSession.topic);
-                attempt.setScore(scorePercent);
-                attempt.setTotalQuestions(totalQuestions);
-                attempt.setCorrectAnswers(correctCount);
-                attempt.setSavedAt(now);
-                attempt.setPassed(passed);
-                attempt.setStartTime(examSession.startTime);
-                attempt.setDurationSeconds(examSession.durationSeconds);
-                attempt.setDeadline(examSession.deadline);
-                attempt.setSubmissionTime(now);
-                attempt.setStatus("auto_submitted_security");
-                attempt.setSubmissionReason("automatic-security-submission");
-                attempt.setViolationCount(examSession.violationCount);
-                attempt.setRiskScore(100);
-                attempt.setRiskLevel("HIGH");
-                attempt.setMonitoringEventsJson(new Gson().toJson(examSession.monitoringEvents));
-                attempt.setSavedAnswersJson(new Gson().toJson(examSession.savedAnswers));
-                attempt.setProctoringStatus("FLAGGED");
-                attempt.setReviewNotes("Automatically submitted after reaching 3 security violations limit.");
-
-                firebaseService.saveTestAttempt(user.getUid(), attempt);
-
-                JsonObject autoRes = new JsonObject();
-                autoRes.addProperty("success", true);
-                autoRes.addProperty("recorded", true);
-                autoRes.addProperty("violationCount", examSession.violationCount);
-                autoRes.addProperty("autoSubmitted", true);
-                autoRes.addProperty("submissionReason", "automatic-security-submission");
-                autoRes.addProperty("score", scorePercent);
-                autoRes.addProperty("correctCount", correctCount);
-                autoRes.addProperty("totalQuestions", totalQuestions);
-                autoRes.addProperty("passed", passed);
-                autoRes.addProperty("riskScore", 100);
-                autoRes.addProperty("riskLevel", "HIGH");
-                autoRes.add("reviews", reviews);
-
-                return ResponseEntity.ok(autoRes.toString());
-            } else {
-                TestAttempt progressAttempt = new TestAttempt();
-                progressAttempt.setId(examSession.attemptId);
-                progressAttempt.setTestId(examSession.category);
-                progressAttempt.setUserId(user.getUid());
-                progressAttempt.setStudentName(user.getName());
-                progressAttempt.setCategory(examSession.category);
-                progressAttempt.setTopic(examSession.topic);
-                progressAttempt.setStartTime(examSession.startTime);
-                progressAttempt.setSavedAt(now);
-                progressAttempt.setDurationSeconds(examSession.durationSeconds);
-                progressAttempt.setDeadline(examSession.deadline);
-                progressAttempt.setStatus("in_progress");
-                progressAttempt.setSubmissionReason("in_progress");
-                progressAttempt.setViolationCount(examSession.violationCount);
-                progressAttempt.setTotalQuestions(examSession.assignedQuestionIds.size());
-                progressAttempt.setMonitoringEventsJson(new Gson().toJson(examSession.monitoringEvents));
-                progressAttempt.setSavedAnswersJson(new Gson().toJson(examSession.savedAnswers));
-                firebaseService.saveTestAttempt(user.getUid(), progressAttempt);
-            }
-        }
-
-        JsonObject res = new JsonObject();
-        res.addProperty("success", true);
-        res.addProperty("recorded", true);
-        res.addProperty("violationCount", examSession.violationCount);
-        res.addProperty("autoSubmitted", false);
-        return ResponseEntity.ok(res.toString());
+        return ResponseEntity.ok(resp.toString());
     }
 
     @PostMapping(value = "/api/tests/save-progress", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
-    public ResponseEntity<String> saveProgress(HttpServletRequest request) {
+    public ResponseEntity<String> saveProgress(@RequestBody String body, HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         User user = (session != null) ? (User) session.getAttribute("currentUser") : null;
         if (user == null) {
-            return ResponseEntity.status(HttpServletResponse.SC_UNAUTHORIZED)
-                    .body("{\"success\":false,\"error\":\"Unauthorized\"}");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("{\"success\":false}");
         }
 
-        JsonObject body = parseRequestBody(request);
-        if (body == null || !body.has("attemptId")) {
-            return ResponseEntity.badRequest().body("{\"success\":false,\"error\":\"Invalid request\"}");
+        ActiveExamSession examSession = ACTIVE_SESSIONS.get(user.getUid());
+        if (examSession == null || examSession.submitted) {
+            return ResponseEntity.ok("{\"success\":false,\"message\":\"No active session\"}");
         }
 
-        String attemptId = body.get("attemptId").getAsString();
-        ActiveExamSession examSession = ACTIVE_SESSIONS.get(attemptId);
-        if (examSession != null && examSession.userId.equals(user.getUid()) && !examSession.submitted) {
-            if (body.has("answers") && body.get("answers").isJsonObject()) {
-                JsonObject answers = body.getAsJsonObject("answers");
-                for (Map.Entry<String, JsonElement> entry : answers.entrySet()) {
-                    try {
-                        int qId = Integer.parseInt(entry.getKey());
-                        int ans = entry.getValue().getAsInt();
-                        examSession.savedAnswers.put(qId, ans);
-                    } catch (Exception ignored) {}
-                }
-            }
-            if (body.has("currentQuestionIndex")) {
+        JsonObject payload = JsonParser.parseString(body).getAsJsonObject();
+        if (payload.has("answers") && payload.get("answers").isJsonObject()) {
+            JsonObject answers = payload.getAsJsonObject("answers");
+            for (Map.Entry<String, JsonElement> e : answers.entrySet()) {
                 try {
-                    examSession.currentQuestionIndex = body.get("currentQuestionIndex").getAsInt();
+                    int qId = Integer.parseInt(e.getKey());
+                    int opt = e.getValue().getAsInt();
+                    examSession.savedAnswers.put(qId, opt);
                 } catch (Exception ignored) {}
             }
         }
 
-        JsonObject res = new JsonObject();
-        res.addProperty("success", true);
-        res.addProperty("timestamp", System.currentTimeMillis());
-        return ResponseEntity.ok(res.toString());
+        return ResponseEntity.ok("{\"success\":true}");
+    }
+
+    @PostMapping(value = "/api/tests/log-event", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<String> logEvent(@RequestBody String body, HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        User user = (session != null) ? (User) session.getAttribute("currentUser") : null;
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("{\"success\":false}");
+        }
+
+        ActiveExamSession examSession = ACTIVE_SESSIONS.get(user.getUid());
+        if (examSession == null || examSession.submitted) {
+            return ResponseEntity.ok("{\"success\":false}");
+        }
+
+        JsonObject payload = JsonParser.parseString(body).getAsJsonObject();
+        examSession.monitoringEvents.add(payload);
+
+        String type = payload.has("type") ? payload.get("type").getAsString() : "";
+        if ("TAB_SWITCH".equalsIgnoreCase(type) || "FOCUS_LOST".equalsIgnoreCase(type) || "FULLSCREEN_EXIT".equalsIgnoreCase(type)) {
+            examSession.violationCount++;
+        }
+
+        JsonObject resp = new JsonObject();
+        resp.addProperty("success", true);
+        resp.addProperty("violationCount", examSession.violationCount);
+        resp.addProperty("mustAutoSubmit", examSession.violationCount >= 3);
+
+        return ResponseEntity.ok(resp.toString());
     }
 
     @PostMapping(value = "/api/tests/submit", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
-    public ResponseEntity<String> submitTest(HttpServletRequest request) {
+    public ResponseEntity<String> submitExam(@RequestBody String body, HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         User user = (session != null) ? (User) session.getAttribute("currentUser") : null;
         if (user == null) {
-            return ResponseEntity.status(HttpServletResponse.SC_UNAUTHORIZED)
-                    .body("{\"success\":false,\"error\":\"Unauthorized\"}");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("{\"success\":false,\"error\":\"Unauthorized\"}");
         }
 
-        JsonObject submission = parseRequestBody(request);
-        if (submission == null) {
-            return ResponseEntity.badRequest().body("{\"success\":false,\"error\":\"Invalid payload\"}");
-        }
+        JsonObject submission = JsonParser.parseString(body).getAsJsonObject();
+        ActiveExamSession examSession = ACTIVE_SESSIONS.get(user.getUid());
 
-        String attemptId = submission.has("attemptId") ? submission.get("attemptId").getAsString() : null;
-        ActiveExamSession examSession = (attemptId != null) ? ACTIVE_SESSIONS.get(attemptId) : null;
-
-        if (examSession != null && !examSession.userId.equals(user.getUid())) {
-            return ResponseEntity.status(HttpServletResponse.SC_FORBIDDEN)
-                    .body("{\"success\":false,\"error\":\"Exam attempt ownership mismatch\"}");
-        }
-
-        if (examSession != null && examSession.submitted) {
-            JsonObject existingResult = new JsonObject();
-            existingResult.addProperty("success", true);
-            existingResult.addProperty("score", examSession.finalScore);
-            existingResult.addProperty("correctCount", examSession.correctCount);
-            existingResult.addProperty("totalQuestions", examSession.assignedQuestionIds.size());
-            existingResult.addProperty("passed", examSession.finalScore >= 60);
-            existingResult.addProperty("riskScore", examSession.riskScore);
-            existingResult.addProperty("riskLevel", examSession.riskLevel);
-            existingResult.addProperty("status", examSession.status);
-            existingResult.addProperty("submissionReason", examSession.submissionReason);
-            existingResult.addProperty("alreadySubmitted", true);
-            return ResponseEntity.ok(existingResult.toString());
-        }
+        String attemptId = (examSession != null) ? examSession.attemptId :
+                (submission.has("attemptId") ? submission.get("attemptId").getAsString() : "att_" + System.currentTimeMillis());
 
         String category = (examSession != null) ? examSession.category :
-                (submission.has("category") ? submission.get("category").getAsString() : "Technical");
-        String topic = (examSession != null) ? examSession.topic : "Assessment";
+                (submission.has("category") ? submission.get("category").getAsString() : "Quantitative Aptitude");
+        String topic = (examSession != null) ? examSession.topic : "Placement Practice";
 
         Map<Integer, Integer> finalAnswers = new HashMap<>();
         if (examSession != null) {
@@ -579,81 +354,63 @@ public class TestController {
             }
         }
 
-        List<JsonObject> allEvents = new ArrayList<>();
-        if (examSession != null) {
-            allEvents.addAll(examSession.monitoringEvents);
-        }
-        if (submission.has("monitoringEvents") && submission.get("monitoringEvents").isJsonArray()) {
-            for (JsonElement el : submission.getAsJsonArray("monitoringEvents")) {
-                if (el.isJsonObject()) {
-                    allEvents.add(el.getAsJsonObject());
-                }
-            }
-        }
-
         long now = System.currentTimeMillis();
-        String explicitReason = submission.has("submissionReason") ? submission.get("submissionReason").getAsString() : null;
+        String explicitReason = submission.has("submissionReason") ? submission.get("submissionReason").getAsString() : "manual";
         String status = "submitted";
-        String submissionReason = "manual";
 
         if ("automatic-security-submission".equalsIgnoreCase(explicitReason) || (examSession != null && examSession.violationCount >= 3)) {
             status = "auto_submitted_security";
-            submissionReason = "automatic-security-submission";
         } else if ("timeout".equalsIgnoreCase(explicitReason) || (examSession != null && examSession.deadline > 0 && now > examSession.deadline + 15000)) {
             status = "auto_submitted_timeout";
-            submissionReason = "timeout";
         }
 
         int focusLostCount = 0;
         int fullscreenExitCount = 0;
-        int cameraDisconnectCount = 0;
-        int copyPasteCount = 0;
-
-        for (JsonObject evt : allEvents) {
-            String type = evt.has("type") ? evt.get("type").getAsString() : "";
-            if ("FOCUS_LOST".equalsIgnoreCase(type) || "TAB_SWITCH".equalsIgnoreCase(type)) {
-                focusLostCount++;
-            } else if ("FULLSCREEN_EXIT".equalsIgnoreCase(type)) {
-                fullscreenExitCount++;
-            } else if ("CAMERA_DISCONNECTED".equalsIgnoreCase(type) || "CAMERA_ERROR".equalsIgnoreCase(type)) {
-                cameraDisconnectCount++;
-            } else if ("CLIPBOARD_ATTEMPT".equalsIgnoreCase(type) || "COPY_PASTE".equalsIgnoreCase(type)) {
-                copyPasteCount++;
+        if (examSession != null) {
+            for (JsonObject evt : examSession.monitoringEvents) {
+                String type = evt.has("type") ? evt.get("type").getAsString() : "";
+                if ("FOCUS_LOST".equalsIgnoreCase(type) || "TAB_SWITCH".equalsIgnoreCase(type)) focusLostCount++;
+                if ("FULLSCREEN_EXIT".equalsIgnoreCase(type)) fullscreenExitCount++;
             }
         }
 
-        int riskScore = 0;
-        riskScore += Math.min(25, focusLostCount * 5);
-        riskScore += Math.min(30, fullscreenExitCount * 15);
-        riskScore += Math.min(40, cameraDisconnectCount * 25);
-        riskScore += Math.min(20, copyPasteCount * 10);
-        if ("auto_submitted_security".equals(status)) {
-            riskScore = 100;
-        }
-        riskScore = Math.min(100, riskScore);
-
+        int riskScore = Math.min(100, (focusLostCount * 15) + (fullscreenExitCount * 25));
+        if ("auto_submitted_security".equals(status)) riskScore = 100;
         String riskLevel = (riskScore <= 15) ? "LOW" : (riskScore <= 40 ? "MODERATE" : "HIGH");
         String proctoringStatus = (riskScore > 40) ? "FLAGGED" : "VALIDATED";
-
-        int totalQuestions = (examSession != null && !examSession.assignedQuestionIds.isEmpty())
-                ? examSession.assignedQuestionIds.size() : Math.max(1, finalAnswers.size());
-        int correctCount = 0;
-        JsonArray reviews = new JsonArray();
 
         List<Integer> questionIdsToScore = (examSession != null && !examSession.assignedQuestionIds.isEmpty())
                 ? examSession.assignedQuestionIds
                 : new ArrayList<>(finalAnswers.keySet());
 
+        int totalQuestions = Math.max(1, questionIdsToScore.size());
+        int correctCount = 0;
+        int incorrectCount = 0;
+        int unansweredCount = 0;
+        JsonArray reviews = new JsonArray();
+
         for (int qId : questionIdsToScore) {
-            Question q = TestQuestionBank.getQuestionById(qId);
+            Question q = PlacementQuestionBank.getQuestionById(qId);
             if (q != null) {
                 Integer userAns = finalAnswers.get(qId);
-                boolean isCorrect = (userAns != null && userAns == q.getCorrectOption());
-                if (isCorrect) correctCount++;
+                boolean isAnswered = (userAns != null && userAns >= 0);
+                boolean isCorrect = (isAnswered && userAns == q.getCorrectOption());
+
+                if (isCorrect) {
+                    correctCount++;
+                } else if (isAnswered) {
+                    incorrectCount++;
+                } else {
+                    unansweredCount++;
+                }
 
                 JsonObject r = new JsonObject();
                 r.addProperty("questionId", qId);
                 r.addProperty("question", q.getQuestion());
+                r.addProperty("optionA", q.getOptionA());
+                r.addProperty("optionB", q.getOptionB());
+                r.addProperty("optionC", q.getOptionC());
+                r.addProperty("optionD", q.getOptionD());
                 r.addProperty("selectedOption", (userAns != null) ? userAns : -1);
                 r.addProperty("correctOption", q.getCorrectOption());
                 r.addProperty("isCorrect", isCorrect);
@@ -665,19 +422,9 @@ public class TestController {
         int scorePercent = Math.round((correctCount * 100.0f) / totalQuestions);
         boolean passed = scorePercent >= 60;
 
-        if (examSession != null) {
-            examSession.submitted = true;
-            examSession.finalScore = scorePercent;
-            examSession.correctCount = correctCount;
-            examSession.riskScore = riskScore;
-            examSession.riskLevel = riskLevel;
-            examSession.status = status;
-            examSession.submissionReason = submissionReason;
-            examSession.submissionTime = now;
-        }
-
+        // Persist attempt to Firebase Realtime Database
         TestAttempt attempt = new TestAttempt();
-        attempt.setId(attemptId != null ? attemptId : UUID.randomUUID().toString());
+        attempt.setId(attemptId);
         attempt.setTestId(category);
         attempt.setUserId(user.getUid());
         attempt.setStudentName(user.getName());
@@ -690,27 +437,45 @@ public class TestController {
         attempt.setSubmissionTime(now);
         attempt.setPassed(passed);
         attempt.setStartTime(examSession != null ? examSession.startTime : now);
-        attempt.setDurationSeconds(examSession != null ? examSession.durationSeconds : 1500);
+        attempt.setDurationSeconds(examSession != null ? examSession.durationSeconds : 1800);
         attempt.setDeadline(examSession != null ? examSession.deadline : now);
         attempt.setStatus(status);
-        attempt.setSubmissionReason(submissionReason);
+        attempt.setSubmissionReason(explicitReason);
         attempt.setViolationCount(examSession != null ? examSession.violationCount : 0);
         attempt.setRiskScore(riskScore);
         attempt.setRiskLevel(riskLevel);
         attempt.setFocusLostCount(focusLostCount);
         attempt.setFullscreenExitCount(fullscreenExitCount);
-        attempt.setCameraDisconnectCount(cameraDisconnectCount);
-        attempt.setCopyPasteCount(copyPasteCount);
-        attempt.setMonitoringEventsJson(new Gson().toJson(allEvents));
-        attempt.setSavedAnswersJson(new Gson().toJson(finalAnswers));
         attempt.setProctoringStatus(proctoringStatus);
 
         firebaseService.saveTestAttempt(user.getUid(), attempt);
 
+        // Update student metrics in Firebase
+        try {
+            Map<String, Object> metricUpdates = new HashMap<>();
+            StudentMetrics metrics = firebaseService.fetchStudentMetrics(user.getUid());
+            int currentTests = (metrics != null) ? metrics.getTestsCompleted() : 0;
+            metricUpdates.put("testsCompleted", currentTests + 1);
+            if (category.toLowerCase().contains("quant") || category.toLowerCase().contains("aptitude")) {
+                int cur = (metrics != null) ? metrics.getAptitudeSkill() : 0;
+                metricUpdates.put("aptitudeSkill", Math.max(cur, scorePercent));
+            } else if (category.toLowerCase().contains("tech") || category.toLowerCase().contains("code")) {
+                int cur = (metrics != null) ? metrics.getJavaSkill() : 0;
+                metricUpdates.put("javaSkill", Math.max(cur, scorePercent));
+            }
+            firebaseService.updateStudentMetrics(user.getUid(), metricUpdates);
+        } catch (Exception ignored) {}
+
+        // Clear active session
+        ACTIVE_SESSIONS.remove(user.getUid());
+
         JsonObject result = new JsonObject();
         result.addProperty("success", true);
+        result.addProperty("attemptId", attemptId);
         result.addProperty("score", scorePercent);
         result.addProperty("correctCount", correctCount);
+        result.addProperty("incorrectCount", incorrectCount);
+        result.addProperty("unansweredCount", unansweredCount);
         result.addProperty("totalQuestions", totalQuestions);
         result.addProperty("passed", passed);
         result.addProperty("riskScore", riskScore);
@@ -720,19 +485,5 @@ public class TestController {
         result.add("reviews", reviews);
 
         return ResponseEntity.ok(result.toString());
-    }
-
-    private JsonObject parseRequestBody(HttpServletRequest req) {
-        try {
-            StringBuilder sb = new StringBuilder();
-            try (BufferedReader reader = req.getReader()) {
-                String line;
-                while ((line = reader.readLine()) != null) sb.append(line);
-            }
-            if (sb.length() == 0) return null;
-            return JsonParser.parseString(sb.toString()).getAsJsonObject();
-        } catch (Exception e) {
-            return null;
-        }
     }
 }

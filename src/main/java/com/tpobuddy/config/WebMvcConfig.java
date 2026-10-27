@@ -49,7 +49,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
         registry.addInterceptor(sessionAuthInterceptor)
                 .addPathPatterns("/**")
                 .excludePathPatterns("/assets/**", "/react-dist/**", "/favicon.ico", "/", "/index.jsp",
-                        "/login.jsp", "/register.jsp", "/forgot-password.jsp",
+                        "/login", "/login.jsp", "/register", "/register.jsp", "/forgot-password", "/forgot-password.jsp",
                         "/react-portal", "/react-portal.jsp", "/portal", "/react-app",
                         "/api/auth/**", "/logout", "/actuator/**");
     }

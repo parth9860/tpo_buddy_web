@@ -30,7 +30,8 @@
                     <h1 class="page-title">Performance Analytics & Placement Progress</h1>
                     <p class="page-subtitle">Historical test trajectory, topic competencies, and readiness trend analysis.</p>
                 </div>
-                <div>
+                <div style="display: flex; gap: 0.75rem; align-items: center;">
+                    <a href="${pageContext.request.contextPath}/tests" class="btn btn-primary btn-sm">📝 Take Placement Test</a>
                     <button type="button" class="btn btn-outline btn-sm" onclick="handleLogout()">🚪 Logout</button>
                 </div>
             </div>
@@ -125,9 +126,10 @@
                             } else { %>
                                 <tr>
                                     <td colspan="6" style="text-align: center; padding: 3rem; color: var(--text-muted);">
-                                        Insufficient assessment history. Take more section tests in the Tests tab to generate your trend analysis.
-                                        <div style="margin-top: 1rem;">
-                                            <a href="${pageContext.request.contextPath}/tests" class="btn btn-primary btn-sm">Take a Practice Test</a>
+                                        No assessment records found. Update your profile and skills to boost your placement readiness score.
+                                        <div style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: center;">
+                                            <a href="${pageContext.request.contextPath}/tests" class="btn btn-primary btn-sm">Start Placement Test</a>
+                                            <a href="${pageContext.request.contextPath}/dashboard" class="btn btn-secondary btn-sm">Return to Dashboard</a>
                                         </div>
                                     </td>
                                 </tr>

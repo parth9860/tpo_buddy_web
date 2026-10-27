@@ -232,6 +232,13 @@
                             >
                                 <span>&#128196;</span> ATS Resume Check
                             </button>
+                            <a
+                                href={window.CONTEXT_PATH + '/tests'}
+                                className="nav-btn"
+                                style={{ textDecoration: 'none' }}
+                            >
+                                <span>&#128221;</span> Placement Tests
+                            </a>
                         </nav>
 
                         <div style={{ borderTop: '1px solid var(--react-border)', paddingTop: '1rem', marginTop: '1rem' }}>
@@ -321,6 +328,14 @@
                                     <div className="react-card">
                                         <h3 style={{ fontSize: '1.1rem', margin: '0 0 1rem 0' }}>Accelerate Preparation</h3>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                            <a
+                                                href={window.CONTEXT_PATH + '/tests'}
+                                                className="btn btn-primary"
+                                                style={{ padding: '0.85rem', width: '100%', textAlign: 'left', borderRadius: '8px', textDecoration: 'none', display: 'block', background: 'linear-gradient(135deg, #4f46e5, #06b6d4)' }}
+                                            >
+                                                &#128221; <strong>Placement Test Series</strong>
+                                                <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>Topic practice (Quant, Logic, Verbal, Tech) & company mocks</div>
+                                            </a>
                                             <button
                                                 className="btn btn-primary"
                                                 onClick={() => setCurrentTab('ai-interview')}
@@ -330,12 +345,12 @@
                                                 <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>Practice technical & behavioral questions</div>
                                             </button>
                                             <a
-                                                href={window.CONTEXT_PATH + '/tests'}
+                                                href={window.CONTEXT_PATH + '/jobs'}
                                                 className="btn btn-secondary"
                                                 style={{ padding: '0.85rem', width: '100%', textAlign: 'left', borderRadius: '8px', textDecoration: 'none', display: 'block' }}
                                             >
-                                                &#9989; <strong>Timed Assessment Test</strong>
-                                                <div style={{ fontSize: '0.75rem', color: 'var(--react-muted)' }}>25 questions &bull; Anti-cheating proctored</div>
+                                                &#128188; <strong>Explore Placement Drives</strong>
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--react-muted)' }}>View active campus opportunities & apply</div>
                                             </a>
                                             <button
                                                 className="btn btn-secondary"

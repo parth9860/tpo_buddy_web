@@ -40,8 +40,36 @@ function togglePasswordVisibility(inputId, btn) {
     }
 }
 
+// Promise timeout wrapper to prevent hanging operations
+function withTimeout(promise, ms, errorMsg = 'Operation timed out') {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(errorMsg)), ms))
+    ]);
+}
+
+// Basic HTML escaping helper for safe inline display
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, m => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    })[m]);
+}
+
 // Sync verified Firebase ID Token with Java Servlet session
-async function syncSessionWithServer(user, role, branch, name, photoUrl, authProvider) {
+// Returns a structured result object so callers can reliably manage UI state.
+async function syncSessionWithServer(user, role, branch, name, photoUrl, authProvider, college, year) {
+    const result = { success: false, redirect: null, error: null };
+
+    if (!user) {
+        result.error = 'Authentication session is missing. Please sign in again.';
+        return result;
+    }
+
     try {
         const idToken = await user.getIdToken();
         const payload = {
@@ -51,40 +79,58 @@ async function syncSessionWithServer(user, role, branch, name, photoUrl, authPro
             name: name || user.displayName || (user.email ? user.email.split('@')[0] : 'Student'),
             role: role || 'student',
             branch: branch || 'CSE',
+            college: college || "SNJB's Late Sau KBJ College of Engineering",
+            year: year || 'Final Year',
             photoUrl: photoUrl || user.photoURL || '',
             authProvider: authProvider || 'password'
         };
 
-        const res = await fetch(window.CONTEXT_PATH + '/api/auth/session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        // Request timeout to prevent hanging network calls
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        let data = null;
+        try {
+            const res = await fetch(window.CONTEXT_PATH + '/api/auth/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            if (!res.ok) {
+                let errorMsg = 'Unable to verify your identity with the server. Please try again.';
+                try {
+                    const errData = await res.json();
+                    if (errData && errData.error) errorMsg = errData.error;
+                } catch (jsonErr) { /* ignore malformed error bodies */ }
+                result.error = errorMsg;
+                return result;
+            }
+            data = await res.json();
+        } finally {
+            clearTimeout(timeoutId);
+        }
 
-        const data = await res.json();
-        if (data.success) {
-            window.location.href = data.redirect;
+        if (data && data.success) {
+            result.success = true;
+            result.redirect = data.redirect;
+            result.role = data.role;
+            result.name = data.name;
+            result.photoUrl = data.photoUrl;
         } else {
-            showToast(data.error || 'Session creation failed on server.', 'error');
-            resetSocialButtons();
+            result.error = (data && data.error) || 'Session creation failed on server.';
         }
     } catch (err) {
         console.error('Server session sync error:', err);
-        showToast('Unable to synchronize server session.', 'error');
-        resetSocialButtons();
+        result.error = 'Unable to synchronize server session. Please try again.';
     }
+
+    return result;
 }
 
 // Reset button states
 function resetSocialButtons() {
     setSocialButtonsLoading('', false);
-    const submitBtn = document.getElementById('btnSubmit');
-    if (submitBtn) {
-        submitBtn.disabled = false;
-        if (submitBtn.dataset.originalText) {
-            submitBtn.textContent = submitBtn.dataset.originalText;
-        }
-    }
 }
 
 // Set loading state for social login buttons
@@ -101,7 +147,7 @@ function setSocialButtonsLoading(activeProvider, isLoading) {
             submitBtn.disabled = true;
         } else if (submitBtn.dataset.originalText) {
             submitBtn.disabled = false;
-            submitBtn.textContent = submitBtn.dataset.originalText;
+            submitBtn.innerHTML = `<span class="btn-label">${submitBtn.dataset.originalText}</span>`;
         }
     }
 
@@ -122,6 +168,27 @@ function setSocialButtonsLoading(activeProvider, isLoading) {
             }
         }
     });
+}
+
+// Controlled loading state for the Sign In / Create Account buttons
+function setLoginButtonLoading(isLoading, loadingText) {
+    const submitBtn = document.getElementById('btnSubmit');
+    if (!submitBtn) return;
+    if (isLoading) {
+        submitBtn.dataset.originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `
+            <span class="btn-spinner" aria-hidden="true"></span>
+            <span class="btn-label">${loadingText}</span>
+        `;
+    } else {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<span class="btn-label">${submitBtn.dataset.originalText || 'Sign In'}</span>`;
+    }
+}
+
+function resetLoginButton() {
+    setLoginButtonLoading(false);
 }
 
 // Calculate hash code for unique institutional numeric ID
@@ -178,8 +245,10 @@ async function handleSocialLogin(providerType) {
         await processAuthenticatedUser(user, providerName.toLowerCase());
 
     } catch (error) {
-        resetSocialButtons();
         handleSocialAuthError(error, providerType);
+    } finally {
+        // Always release the loading state, even when sign-in fails or the session sync is redirected.
+        resetSocialButtons();
     }
 }
 
@@ -190,7 +259,14 @@ async function processAuthenticatedUser(user, authProviderName) {
 
     // Immediately synchronize authenticated session with Spring Boot backend
     // The backend securely verifies the Firebase ID token and retrieves authoritative role & profile from Realtime Database
-    await syncSessionWithServer(user, 'student', 'CSE', user.displayName || '', user.photoURL || '', authProviderName);
+    const sessionResult = await syncSessionWithServer(user, 'student', 'CSE', user.displayName || '', user.photoURL || '', authProviderName);
+
+    if (sessionResult && sessionResult.success && sessionResult.redirect) {
+        window.location.href = sessionResult.redirect;
+        return;
+    }
+
+    handleSocialAuthError(new Error((sessionResult && sessionResult.error) || 'Session synchronization failed. Please try again.'), 'social');
 }
 
 // Handle and format social authentication errors
@@ -335,154 +411,385 @@ async function handleAccountLinkingSubmit(e) {
 
 // Handle Student & User Login (Option 1: Email and Password)
 async function handleLogin(e) {
-    e.preventDefault();
+    if (e && e.preventDefault) {
+        e.preventDefault();
+    }
+
     const emailInput = document.getElementById('email');
     const passInput = document.getElementById('password');
     const email = emailInput ? emailInput.value.trim() : '';
     const password = passInput ? passInput.value : '';
-    const submitBtn = document.getElementById('btnSubmit');
+    const errorBox = document.getElementById('loginError');
+
+    const showError = (msg) => {
+        if (errorBox) {
+            errorBox.textContent = msg;
+            errorBox.style.display = 'flex';
+        }
+    };
 
     // Client-side validations
     if (!email || !password) {
-        showToast('Please enter both email address and password.', 'error');
+        showError('Please enter both email address and password.');
         return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-        showToast('Please enter a valid email address format (e.g., student@college.edu).', 'error');
+        showError('Please enter a valid email address format (e.g., student@college.edu).');
         return;
     }
 
     if (password.length < 6) {
-        showToast('Password must be at least 6 characters long.', 'error');
+        showError('Password must be at least 6 characters long.');
         return;
     }
 
-    submitBtn.disabled = true;
-    submitBtn.dataset.originalText = submitBtn.textContent;
-    submitBtn.textContent = 'Verifying credentials...';
+    if (typeof auth === 'undefined' || !auth) {
+        setLoginButtonLoading(false);
+        showError('Authentication service is temporarily unavailable. Please try again in a moment.');
+        showToast('Authentication service is temporarily unavailable. Please try again.', 'error');
+        return;
+    }
+
+    setLoginButtonLoading(true, 'Verifying credentials...');
+
+    let redirectUrl = null;
+    // Safety watchdog: never leave the button stuck in a loading state
+    const watchdogId = setTimeout(() => {
+        resetLoginButton();
+        const timeoutMsg = 'Login request timed out. Please check your connection and try again.';
+        showError(timeoutMsg);
+        showToast(timeoutMsg, 'error');
+    }, 60000);
 
     try {
         const cred = await auth.signInWithEmailAndPassword(email, password);
-        const user = cred.user;
+        const user = cred ? cred.user : null;
+
+        if (!user) {
+            throw new Error('Authentication failed. No user returned from provider.');
+        }
 
         showToast('Authentication verified! Synchronizing session...', 'success');
         // Synchronize directly with Spring Boot backend (Fast, <500ms)
-        await syncSessionWithServer(user, null, null, user.displayName || '', user.photoURL || '', 'password');
-    } catch (error) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Sign In';
-        let msg = 'Incorrect email or password.';
-        if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-            msg = 'Invalid email or password. Please verify your credentials and try again.';
-        } else if (error.code === 'auth/too-many-requests') {
-            msg = 'Access to this account has been temporarily disabled due to multiple failed login attempts. Please reset your password or try again later.';
-        } else if (error.code === 'auth/invalid-email') {
-            msg = 'The email address format is invalid. Please check and retry.';
-        } else if (error.code === 'auth/user-disabled') {
-            msg = 'This user account has been disabled by an administrator. Please contact your campus placement officer.';
-        } else if (error.code === 'auth/network-request-failed') {
-            msg = 'Network connection failed. Please verify your internet connection.';
+        const sessionResult = await syncSessionWithServer(user, null, null, user.displayName || '', user.photoURL || '', 'password');
+
+        if (sessionResult && sessionResult.success && sessionResult.redirect) {
+            redirectUrl = sessionResult.redirect;
+        } else if (sessionResult && sessionResult.error) {
+            showError(sessionResult.error);
         }
-        showToast(msg, 'error');
+    } catch (error) {
+        handleLoginError(error);
+    } finally {
+        clearTimeout(watchdogId);
+        // ALWAYS restore the button state unless a successful redirect is being performed.
+        if (!redirectUrl) {
+            resetLoginButton();
+        }
     }
+
+    if (redirectUrl) {
+        window.location.href = redirectUrl;
+    }
+}
+
+// Map Firebase authentication errors to user-friendly messages
+function handleLoginError(error) {
+    let msg = 'Incorrect email or password. Please verify your credentials and try again.';
+
+    if (error) {
+        switch (error.code) {
+            case 'auth/invalid-credential':
+            case 'auth/wrong-password':
+            case 'auth/user-not-found':
+            case 'auth/invalid-email':
+                msg = 'Invalid email or password. Please verify your credentials and try again.';
+                break;
+            case 'auth/too-many-requests':
+                msg = 'Access to this account has been temporarily disabled due to multiple failed login attempts. Please reset your password or try again later.';
+                break;
+            case 'auth/user-disabled':
+                msg = 'This user account has been disabled by an administrator. Please contact your campus placement officer.';
+                break;
+            case 'auth/network-request-failed':
+                msg = 'Network connection failed. Please verify your internet connection and try again.';
+                break;
+            case 'auth/expired-id-token':
+                msg = 'Your session has expired. Please sign in again to continue.';
+                break;
+            case 'auth/operation-not-allowed':
+                msg = 'Email and password sign-in is not enabled. Please contact support.';
+                break;
+            case 'auth/unauthorized-domain':
+                msg = 'This domain is not authorized for authentication. Please contact the administrator.';
+                break;
+            default:
+                if (error.message) {
+                    msg = error.message;
+                }
+                break;
+        }
+    }
+
+    const errorBox = document.getElementById('loginError');
+    if (errorBox) {
+        errorBox.textContent = msg;
+        errorBox.style.display = 'flex';
+    }
+    showToast(msg, 'error');
 }
 
 // Handle Student Registration
 async function handleRegister(e) {
-    e.preventDefault();
-    const name = document.getElementById('name').value.trim();
-    const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value;
-    const branch = document.getElementById('branch').value;
-    const year = document.getElementById('year').value;
-    const college = document.getElementById('college').value.trim();
+    if (e && e.preventDefault) e.preventDefault();
+
+    const nameInput = document.getElementById('name');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const confirmPasswordInput = document.getElementById('confirmPassword');
+    const branchInput = document.getElementById('branch');
+    const yearInput = document.getElementById('year');
+    const collegeInput = document.getElementById('college');
     const submitBtn = document.getElementById('btnSubmit');
+    const errorBox = document.getElementById('registerError');
 
-    if (!name || !email || !password) {
-        showToast('Please fill in all required fields.', 'error');
+    const showError = (msg, isHtml = false) => {
+        if (errorBox) {
+            if (isHtml) {
+                errorBox.innerHTML = msg;
+            } else {
+                errorBox.textContent = msg;
+            }
+            errorBox.style.display = 'block';
+        }
+        if (!isHtml) {
+            showToast(msg, 'error');
+        }
+    };
+
+    const clearError = () => {
+        if (errorBox) {
+            errorBox.innerHTML = '';
+            errorBox.style.display = 'none';
+        }
+    };
+
+    clearError();
+
+    const name = nameInput ? nameInput.value.trim() : '';
+    const email = emailInput ? emailInput.value.trim() : '';
+    const password = passwordInput ? passwordInput.value : '';
+    const confirmPassword = confirmPasswordInput ? confirmPasswordInput.value : '';
+    const branch = branchInput ? branchInput.value : 'CSE';
+    const year = yearInput ? yearInput.value : 'Final Year';
+    const college = collegeInput ? collegeInput.value.trim() : "SNJB's Late Sau KBJ College of Engineering";
+
+    // 1. Strict Form Validation
+    if (!name) {
+        showError('Please enter your full name.');
+        if (nameInput) nameInput.focus();
+        return;
+    }
+    if (name.length < 2) {
+        showError('Full name must be at least 2 characters long.');
+        if (nameInput) nameInput.focus();
         return;
     }
 
+    if (!email) {
+        showError('Please enter your college email address.');
+        if (emailInput) emailInput.focus();
+        return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        showError('Please enter a valid email format (e.g., student@college.edu).');
+        if (emailInput) emailInput.focus();
+        return;
+    }
+
+    if (!password) {
+        showError('Please enter a secure password.');
+        if (passwordInput) passwordInput.focus();
+        return;
+    }
     if (password.length < 6) {
-        showToast('Password must be at least 6 characters long.', 'error');
+        showError('Password must be at least 6 characters long.');
+        if (passwordInput) passwordInput.focus();
         return;
     }
 
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Creating account...';
+    if (confirmPasswordInput && password !== confirmPassword) {
+        showError('Passwords do not match. Please re-enter to confirm.');
+        if (confirmPasswordInput) confirmPasswordInput.focus();
+        return;
+    }
+
+    if (typeof auth === 'undefined' || !auth) {
+        showError('Authentication service is temporarily unavailable. Please refresh the page.');
+        return;
+    }
+
+    // 2. Prevent Duplicate Submissions & Display Loading Spinner
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `
+            <span class="btn-spinner" aria-hidden="true" style="display:inline-block; vertical-align:middle; width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:8px;"></span>
+            <span class="btn-label">Creating account...</span>
+        `;
+    }
+
+    // Safety watchdog timer: never leave the submit button permanently stuck
+    const watchdogId = setTimeout(() => {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<span class="btn-label">Create Student Account</span>';
+        }
+        showError('Registration request timed out. If your account was created, please try signing in.');
+    }, 25000);
 
     try {
+        // 3. Create Account in Firebase Authentication
         const cred = await auth.createUserWithEmailAndPassword(email, password);
         const user = cred.user;
         const uid = user.uid;
-        const numericId = Math.abs(uid.hashCode ? uid.hashCode() : (Math.floor(Math.random() * 89999) + 10000));
+        const numericId = Math.floor(Math.random() * 89999) + 10000;
 
-        // Create Realtime Database user node matching Android app
+        // Try updating display name on Firebase Auth user object
+        try {
+            if (user.updateProfile) {
+                await user.updateProfile({ displayName: name });
+            }
+        } catch (ignored) {}
+
+        // 4. Construct Authoritative Student Profile
         const userProfile = {
             uid: uid,
             numericId: numericId,
             name: name,
+            displayName: name,
             email: email,
-            college: college || 'National Institute of Technology',
+            college: college || "SNJB's Late Sau KBJ College of Engineering",
             branch: branch || 'CSE',
             year: year || 'Final Year',
             skills: 'Java, SQL',
             interests: 'Software Development',
             role: 'student',
-            createdAt: firebase.database.ServerValue.TIMESTAMP
+            authProvider: 'password',
+            createdAt: (typeof firebase !== 'undefined' && firebase.database && firebase.database.ServerValue)
+                ? firebase.database.ServerValue.TIMESTAMP
+                : Date.now()
         };
 
-        await database.ref('users/' + uid).set(userProfile);
+        // 5. Write to Realtime Database with timeout protection
+        if (typeof database !== 'undefined' && database) {
+            try {
+                await withTimeout(database.ref('users/' + uid).set(userProfile), 5000, 'Database write timeout');
+            } catch (dbErr) {
+                console.warn('Realtime Database write note (will synchronize via server):', dbErr);
+            }
 
-        // Also write to Cloud Firestore `users/{uid}`
-        try {
-            if (typeof firestore !== 'undefined' && firestore) {
-                const fsProfile = Object.assign({}, userProfile, {
+            // Seed initial student_metrics node
+            const initialMetrics = {
+                javaSkill: 0,
+                dsaSkill: 0,
+                sqlSkill: 0,
+                aptitudeSkill: 0,
+                technicalScore: 0,
+                interviewScore: 0,
+                skillCompletionScore: 20,
+                resumeScore: 0,
+                testsCompleted: 0,
+                streakDays: 1,
+                desiredRole: 'Software Engineer',
+                targetSalary: '₹12.0 LPA',
+                preferredLocation: 'Bangalore / Remote',
+                updatedAt: (typeof firebase.database !== 'undefined' && firebase.database.ServerValue)
+                    ? firebase.database.ServerValue.TIMESTAMP
+                    : Date.now()
+            };
+            try {
+                await withTimeout(database.ref('student_metrics/' + uid).set(initialMetrics), 4000, 'Metrics seed timeout');
+            } catch (mErr) {
+                console.warn('Metrics seed note:', mErr);
+            }
+        }
+
+        // 6. Write to Cloud Firestore with fail-safe timeout (never blocks registration if unprovisioned)
+        if (typeof firestore !== 'undefined' && firestore) {
+            try {
+                const fsProfile = {
+                    uid: uid,
+                    numericId: numericId,
+                    name: name,
                     displayName: name,
+                    email: email,
+                    role: 'student',
+                    branch: branch || 'CSE',
+                    year: year || 'Final Year',
+                    college: college || "SNJB's Late Sau KBJ College of Engineering",
                     authProvider: 'password',
                     createdAt: (typeof firebase.firestore !== 'undefined' && firebase.firestore.FieldValue)
                         ? firebase.firestore.FieldValue.serverTimestamp()
                         : new Date().toISOString()
-                });
-                await firestore.collection('users').doc(uid).set(fsProfile, { merge: true });
+                };
+                await withTimeout(firestore.collection('users').doc(uid).set(fsProfile, { merge: true }), 3000, 'Firestore timeout');
+            } catch (fsErr) {
+                console.warn('Firestore user profile seed note (handled via server fallback):', fsErr);
             }
-        } catch (fsErr) {
-            console.warn('Firestore user seed warning:', fsErr);
         }
 
-        // Seed initial student_metrics node
-        const initialMetrics = {
-            javaSkill: 0,
-            dsaSkill: 0,
-            sqlSkill: 0,
-            aptitudeSkill: 0,
-            technicalScore: 0,
-            interviewScore: 0,
-            skillCompletionScore: 20,
-            resumeScore: 0,
-            testsCompleted: 0,
-            streakDays: 1,
-            desiredRole: 'Software Engineer',
-            targetSalary: '₹12.0 LPA',
-            preferredLocation: 'Bangalore / Remote',
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        };
-        await database.ref('student_metrics/' + uid).set(initialMetrics);
+        // 7. Synchronize Session with Trusted Spring Boot Backend
+        const sessionResult = await syncSessionWithServer(user, 'student', branch, name, '', 'password', college, year);
 
-        showToast('Registration successful! Launching dashboard...', 'success');
-        await syncSessionWithServer(user, 'student', branch, name, '', 'password');
+        clearTimeout(watchdogId);
+
+        if (sessionResult && sessionResult.success && sessionResult.redirect) {
+            showToast('Registration successful! Launching student dashboard...', 'success');
+            window.location.href = sessionResult.redirect;
+            return;
+        }
+
+        throw new Error((sessionResult && sessionResult.error) || 'Registration succeeded, but server session could not be established.');
+
     } catch (error) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Create Student Account';
-        let msg = 'Registration failed. Please try again.';
-        if (error.code === 'auth/email-already-in-use') {
-            msg = 'An account with this email address already exists.';
-        } else if (error.code === 'auth/weak-password') {
-            msg = 'Password is too weak. Must be at least 6 characters.';
+        clearTimeout(watchdogId);
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<span class="btn-label">Create Student Account</span>';
         }
-        showToast(msg, 'error');
+
+        let msg = 'Registration failed. Please check your details and try again.';
+        let isHtml = false;
+
+        if (error.code === 'auth/email-already-in-use') {
+            msg = `An account with <strong>${escapeHtml(email)}</strong> already exists. ` +
+                  `<a href="${window.CONTEXT_PATH || ''}/login.jsp?email=${encodeURIComponent(email)}" style="font-weight: 600; text-decoration: underline; margin-left: 6px; color: #2563eb;">Sign In Instead &rarr;</a>`;
+            isHtml = true;
+            showToast('An account with this email address already exists.', 'error');
+        } else if (error.code === 'auth/weak-password') {
+            msg = 'Password is too weak. Please use at least 6 characters with a combination of letters and numbers.';
+            showToast(msg, 'error');
+        } else if (error.code === 'auth/invalid-email') {
+            msg = 'The email address format is invalid. Please check for errors.';
+            showToast(msg, 'error');
+        } else if (error.code === 'auth/network-request-failed') {
+            msg = 'Network connection failed. Please check your internet connection and try again.';
+            showToast(msg, 'error');
+        } else if (error.code === 'auth/operation-not-allowed') {
+            msg = 'Email/password registration is not enabled. Please contact your campus placement officer.';
+            showToast(msg, 'error');
+        } else if (error.code === 'auth/too-many-requests') {
+            msg = 'Too many registration requests. Please wait a few moments before trying again.';
+            showToast(msg, 'error');
+        } else if (error.message) {
+            msg = error.message;
+            showToast(msg, 'error');
+        }
+
+        showError(msg, isHtml);
     }
 }
 
