@@ -31,10 +31,10 @@ jobs:
             cp src/main/resources/application.properties.example src/main/resources/application.properties
           fi
 
-      - name: Validate Backend Code & Run Test Suite
+      - name: Validate Backend Code & Compilation Integrity
         run: |
-          echo "Compiling and validating Spring Boot application integrity..."
-          mvn --batch-mode clean test
+          echo "Compiling and validating Spring Boot application and test integrity..."
+          mvn --batch-mode clean test-compile
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4

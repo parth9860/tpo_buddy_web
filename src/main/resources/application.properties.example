@@ -25,15 +25,15 @@ spring.servlet.multipart.enabled=true
 # Disable automatic JPA/DataSource bootstrap unless MySQL URL is provided
 spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
 
-# Firebase Configuration (Replace with your actual Firebase Project credentials)
-firebase.projectId=YOUR_PROJECT_ID
-firebase.apiKey=YOUR_FIREBASE_API_KEY
-firebase.authDomain=YOUR_PROJECT_ID.firebaseapp.com
-firebase.databaseURL=https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com
-firebase.storageBucket=YOUR_PROJECT_ID.firebasestorage.app
-firebase.messagingSenderId=YOUR_MESSAGING_SENDER_ID
-firebase.appId=YOUR_APP_ID
-firebase.measurementId=YOUR_MEASUREMENT_ID
+# Firebase Configuration
+firebase.projectId=tpobuddy
+firebase.apiKey=${FIREBASE_API_KEY:AIzaSyDZoYdhWMj76s3Q8Oujohus2kSmkNTyU0Y}
+firebase.authDomain=tpobuddy.firebaseapp.com
+firebase.databaseURL=https://tpobuddy-default-rtdb.firebaseio.com
+firebase.storageBucket=tpobuddy.firebasestorage.app
+firebase.messagingSenderId=811364970356
+firebase.appId=1:811364970356:web:09bc29db4bff3a07cb4621
+firebase.measurementId=G-K3KP8NTCSF
 
 # Roles & Access Control
 roles.student=student
