@@ -24,9 +24,12 @@
             </a>
         </li>
         <li>
-            <a href="${pageContext.request.contextPath}/tests" class="nav-item-link <%= currentPath.contains("tests") ? "active" : "" %>">
-                <span class="nav-icon">&#127919;</span>
-                <span>AI Test Series</span>
+            <a href="${pageContext.request.contextPath}/tests" class="nav-item-link <%= currentPath.contains("tests") ? "active" : "" %>" style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 0.65rem;">
+                    <span class="nav-icon">&#127919;</span>
+                    <span>AI Test Series</span>
+                </div>
+                <span class="badge" style="font-size: 0.65rem; background: #2563eb; color: #fff; padding: 2px 7px; border-radius: 9999px; font-weight: 700;">Live</span>
             </a>
         </li>
         <li>

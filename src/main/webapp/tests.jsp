@@ -21,6 +21,58 @@
     <jsp:include page="/WEB-INF/fragments/head.jsp" />
     <script src="${pageContext.request.contextPath}/assets/js/tests.js?v=<%= System.currentTimeMillis() %>"></script>
     <style>
+        /* ------------------------------------------------------------------ */
+        /* Fullscreen Examination Lockdown Mode                               */
+        /* Hides all sidebars, navigation, headers.                           */
+        /* The entire viewport is 100% focused on the test interface only.     */
+        /* ------------------------------------------------------------------ */
+        body.in-exam-mode {
+            overflow: hidden !important;
+            background: #f1f5f9 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        body.in-exam-mode .app-sidebar,
+        body.in-exam-mode .page-header,
+        body.in-exam-mode .bg-grid-overlay,
+        body.in-exam-mode .category-nav-bar,
+        body.in-exam-mode #testCategoryPicker,
+        body.in-exam-mode nav,
+        body.in-exam-mode header {
+            display: none !important;
+        }
+        body.in-exam-mode .app-shell {
+            display: block !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+        }
+        body.in-exam-mode .app-main {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100vw !important;
+            max-width: 100vw !important;
+            height: 100vh !important;
+            overflow: hidden !important;
+        }
+        body.in-exam-mode #testRunner {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 999999 !important;
+            background: #f1f5f9 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow-y: auto !important;
+            padding: 1.25rem 2rem !important;
+            box-sizing: border-box !important;
+        }
+
         /* Top Category Navigation Tabs */
         .category-nav-bar {
             display: flex;
@@ -373,8 +425,8 @@
                     </p>
                 </div>
                 <div style="display: flex; gap: 0.75rem; align-items: center;">
-                    <span class="badge badge-primary" style="font-size: 0.85rem; padding: 0.45rem 0.85rem;">
-                        ⚡ Gemini AI Integrated
+                    <span class="badge badge-primary" style="font-size: 0.85rem; padding: 0.45rem 0.85rem; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe;">
+                        ⚡ AI Proctored Assessment
                     </span>
                     <button type="button" class="btn btn-outline btn-sm" onclick="handleLogout()">🚪 Logout</button>
                 </div>
@@ -873,9 +925,9 @@
 
                         <!-- Proctoring Rules -->
                         <ul style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 1rem; padding-left: 1.2rem;">
-                            <li>Personalized test generated with <strong>Gemini AI</strong> (30 balanced questions).</li>
-                            <li>The assessment runs in <strong>mandatory fullscreen mode</strong>.</li>
-                            <li>Exiting fullscreen or switching browser tabs triggers an <strong>integrity warning</strong> (Max 3 strikes).</li>
+                            <li>Personalized 30-question assessment calibrated to your target track.</li>
+                            <li>The assessment runs in <strong>mandatory locked fullscreen mode</strong>.</li>
+                            <li>Exiting fullscreen or switching browser tabs triggers an <strong>integrity penalty warning</strong> (Max 3 strikes).</li>
                             <li>Countdown timer continues even if you reload the page.</li>
                         </ul>
 
@@ -917,7 +969,7 @@
                         Preparing Your Personalized Test
                     </h3>
                     <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1.25rem;" id="aiLoadingSeriesLabel">
-                        Generating questions with Google Gemini AI...
+                        Calibrating 30 balanced questions & secure environment...
                     </div>
 
                     <div class="ai-progress-bar-container">
@@ -925,10 +977,10 @@
                     </div>
 
                     <div id="aiLoadingStatusText" style="font-size: 0.85rem; font-weight: 600; color: var(--primary); min-height: 24px;">
-                        Contacting Gemini AI Engine...
+                        Preparing your test session...
                     </div>
                     <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 1rem;">
-                        Generating 50 candidate questions, strictly validating schema, and selecting 30 balanced questions based on topic weights.
+                        Calibrating questions, validating option keys, and configuring fullscreen integrity proctoring.
                     </p>
                 </div>
             </div>

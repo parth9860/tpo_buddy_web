@@ -187,6 +187,26 @@ async function startExamInFullscreen() {
     const setupModal = document.getElementById('examSetupModal');
     if (setupModal) setupModal.classList.remove('active');
 
+    // 1. Immediately request fullscreen synchronously within direct click gesture
+    try {
+        if (!document.fullscreenElement) {
+            const doc = document.documentElement;
+            if (doc.requestFullscreen) {
+                doc.requestFullscreen().catch(() => {});
+            } else if (doc.webkitRequestFullscreen) {
+                doc.webkitRequestFullscreen();
+            } else if (doc.msRequestFullscreen) {
+                doc.msRequestFullscreen();
+            }
+        }
+    } catch (e) {
+        console.warn('Initial fullscreen gesture notice:', e);
+    }
+
+    // 2. Lock down UI immediately: hide sidebar, navbar, and headers
+    document.body.classList.add('in-exam-mode');
+    document.documentElement.classList.add('in-exam-mode');
+
     // Ensure latest difficulty selection is picked up
     const diffInput = document.getElementById('selectedDifficultyInput');
     if (diffInput && diffInput.value) {
@@ -195,7 +215,7 @@ async function startExamInFullscreen() {
         selectedDifficulty = window.selectedDifficulty;
     }
 
-    // Show AI Generation Loading Modal
+    // Show Preparation Modal
     showAiLoadingModal();
 
     try {
@@ -233,6 +253,8 @@ async function startExamInFullscreen() {
             await fallbackStartExam();
         } catch (fallbackErr) {
             hideAiLoadingModal();
+            document.body.classList.remove('in-exam-mode');
+            document.documentElement.classList.remove('in-exam-mode');
             alert('Failed to initialize test: ' + (fallbackErr.message || 'Network error connecting to test engine.'));
         }
     }
@@ -264,6 +286,9 @@ async function fallbackStartExam() {
         remainingSeconds = data.durationSeconds || 1800;
         violationCount = 0;
 
+        document.body.classList.add('in-exam-mode');
+        document.documentElement.classList.add('in-exam-mode');
+
         switchToExamRunnerView(selectedCategory, selectedTitle, selectedDifficulty);
         startTimerCountdown();
         attachSecurityWatchdogs();
@@ -271,6 +296,8 @@ async function fallbackStartExam() {
         renderCurrentQuestion();
     } else {
         hideAiLoadingModal();
+        document.body.classList.remove('in-exam-mode');
+        document.documentElement.classList.remove('in-exam-mode');
         alert('Failed to initialize test questions: ' + (data.error || data.message || 'Unknown error'));
     }
 }
@@ -279,10 +306,10 @@ function showAiLoadingModal() {
     const modal = document.getElementById('aiGenLoadingModal');
     if (modal) {
         const label = document.getElementById('aiLoadingSeriesLabel');
-        if (label) label.textContent = `${selectedTitle} • ${selectedDifficulty} Difficulty`;
+        if (label) label.textContent = `${selectedTitle} • ${selectedDifficulty} Assessment`;
 
         const status = document.getElementById('aiLoadingStatusText');
-        if (status) status.textContent = 'Step 1/4: Contacting Gemini AI to generate 50 candidate questions...';
+        if (status) status.textContent = 'Step 1/4: Calibrating 30 balanced questions for assessment...';
 
         const bar = document.getElementById('aiProgressBar');
         if (bar) bar.style.width = '25%';
@@ -312,13 +339,13 @@ function pollGenerationStatus(attemptId) {
             const bar = document.getElementById('aiProgressBar');
 
             if (pollCount > 2 && pollCount < 5) {
-                if (statusText) statusText.textContent = 'Step 2/4: Validating structured JSON, non-empty options, and correctness...';
+                if (statusText) statusText.textContent = 'Step 2/4: Validating structured questions, options, and difficulty calibration...';
                 if (bar) bar.style.width = '55%';
             } else if (pollCount >= 5 && pollCount < 8) {
-                if (statusText) statusText.textContent = 'Step 3/4: Selecting 30 balanced questions mapped to syllabus topic weights...';
+                if (statusText) statusText.textContent = 'Step 3/4: Setting up proctoring integrity watchdog & timer...';
                 if (bar) bar.style.width = '80%';
             } else if (pollCount >= 8) {
-                if (statusText) statusText.textContent = 'Step 4/4: Isolating secure attempt and encrypting server-side answer keys...';
+                if (statusText) statusText.textContent = 'Step 4/4: Test ready! Launching fullscreen exam view...';
                 if (bar) bar.style.width = '95%';
             }
 
@@ -382,6 +409,9 @@ async function fetchAndLaunchQuestions(attemptId) {
 }
 
 function switchToExamRunnerView(category, title, difficulty) {
+    document.body.classList.add('in-exam-mode');
+    document.documentElement.classList.add('in-exam-mode');
+
     const picker = document.getElementById('testCategoryPicker');
     const runner = document.getElementById('testRunner');
     const resultCard = document.getElementById('testResultCard');
@@ -821,16 +851,46 @@ async function submitAssessmentTest(reason = 'manual') {
         if (data.success) {
             renderAssessmentResult(data);
         } else {
-            alert('Submission grading error: ' + (data.message || data.error || 'Server error'));
+            console.warn('Endpoint /api/test-attempts/.../submit failed, trying fallback /api/tests/submit...', data);
+            await fallbackSubmitExam(reason);
         }
     } catch (err) {
-        alert('Network error submitting test. Your answers have been preserved.');
+        console.warn('Network error on primary submit, trying fallback /api/tests/submit...', err);
+        try {
+            await fallbackSubmitExam(reason);
+        } catch (fbErr) {
+            alert('Network error submitting test. Your answers have been preserved.');
+        }
     } finally {
         isSubmitting = false;
     }
 }
 
+async function fallbackSubmitExam(reason = 'manual') {
+    const payload = {
+        attemptId: activeAttemptId,
+        answers: userAnswers,
+        submissionReason: reason
+    };
+
+    const res = await fetch(`${window.CONTEXT_PATH}/api/tests/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (data.success) {
+        renderAssessmentResult(data);
+    } else {
+        alert('Submission error: ' + (data.message || data.error || 'Server error while grading test'));
+    }
+}
+
 function renderAssessmentResult(data) {
+    document.body.classList.remove('in-exam-mode');
+    document.documentElement.classList.remove('in-exam-mode');
+
     const runner = document.getElementById('testRunner');
     const resultCard = document.getElementById('testResultCard');
 
@@ -922,8 +982,10 @@ function renderAssessmentResult(data) {
             card.className = `review-item-card ${r.isCorrect ? 'correct' : 'incorrect'}`;
 
             const optLetters = ['A', 'B', 'C', 'D'];
-            const userChoiceText = r.userAnswer >= 0 ? `${optLetters[r.userAnswer]}` : 'Unanswered';
-            const correctChoiceText = `${optLetters[r.correctAnswer]}`;
+            const userAnsIdx = (r.userAnswer !== undefined && r.userAnswer !== null) ? r.userAnswer : ((r.selectedOption !== undefined && r.selectedOption !== null) ? r.selectedOption : -1);
+            const userChoiceText = userAnsIdx >= 0 ? `${optLetters[userAnsIdx]}` : 'Unanswered';
+            const corrAnsIdx = (r.correctAnswer !== undefined && r.correctAnswer !== null) ? r.correctAnswer : ((r.correctOption !== undefined && r.correctOption !== null) ? r.correctOption : 0);
+            const correctChoiceText = `${optLetters[corrAnsIdx]}`;
 
             let passageHtml = '';
             if (r.passageOrCode && r.passageOrCode.trim().length > 0) {
