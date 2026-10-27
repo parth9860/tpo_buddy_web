@@ -1,17 +1,161 @@
 # ==============================================================================
-# Netlify Configuration - TPO Buddy (React Portal)
+# Netlify Configuration - TPO Buddy Complete Placement Platform
 # ==============================================================================
 
 [build]
-  base = "client"
-  command = "npm run build"
+  command = "node scripts/build-static-site.mjs"
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "20"
-  NPM_FLAGS = "--legacy-peer-deps"
 
-# Single Page Application (SPA) client-side routing fallback
+# Canonical page routing & redirects
+[[redirects]]
+  from = "/index.jsp"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/login.jsp"
+  to = "/login.html"
+  status = 200
+
+[[redirects]]
+  from = "/register.jsp"
+  to = "/register.html"
+  status = 200
+
+[[redirects]]
+  from = "/forgot-password.jsp"
+  to = "/forgot-password.html"
+  status = 200
+
+[[redirects]]
+  from = "/student-dashboard.jsp"
+  to = "/dashboard.html"
+  status = 200
+
+[[redirects]]
+  from = "/interview.jsp"
+  to = "/interview.html"
+  status = 200
+
+[[redirects]]
+  from = "/tests.jsp"
+  to = "/tests.html"
+  status = 200
+
+[[redirects]]
+  from = "/test-result.jsp"
+  to = "/test-result.html"
+  status = 200
+
+[[redirects]]
+  from = "/resume-analysis.jsp"
+  to = "/resume.html"
+  status = 200
+
+[[redirects]]
+  from = "/jobs.jsp"
+  to = "/jobs.html"
+  status = 200
+
+[[redirects]]
+  from = "/ai-buddy.jsp"
+  to = "/ai-buddy.html"
+  status = 200
+
+[[redirects]]
+  from = "/progress.jsp"
+  to = "/progress.html"
+  status = 200
+
+[[redirects]]
+  from = "/profile.jsp"
+  to = "/profile.html"
+  status = 200
+
+[[redirects]]
+  from = "/login"
+  to = "/login.html"
+  status = 200
+
+[[redirects]]
+  from = "/register"
+  to = "/register.html"
+  status = 200
+
+[[redirects]]
+  from = "/forgot-password"
+  to = "/forgot-password.html"
+  status = 200
+
+[[redirects]]
+  from = "/dashboard"
+  to = "/dashboard.html"
+  status = 200
+
+[[redirects]]
+  from = "/interview"
+  to = "/interview.html"
+  status = 200
+
+[[redirects]]
+  from = "/tests"
+  to = "/tests.html"
+  status = 200
+
+[[redirects]]
+  from = "/test-result"
+  to = "/test-result.html"
+  status = 200
+
+[[redirects]]
+  from = "/resume"
+  to = "/resume.html"
+  status = 200
+
+[[redirects]]
+  from = "/jobs"
+  to = "/jobs.html"
+  status = 200
+
+[[redirects]]
+  from = "/ai-buddy"
+  to = "/ai-buddy.html"
+  status = 200
+
+[[redirects]]
+  from = "/progress"
+  to = "/progress.html"
+  status = 200
+
+[[redirects]]
+  from = "/profile"
+  to = "/profile.html"
+  status = 200
+
+[[redirects]]
+  from = "/faculty"
+  to = "/faculty.html"
+  status = 200
+
+[[redirects]]
+  from = "/admin"
+  to = "/admin.html"
+  status = 200
+
+[[redirects]]
+  from = "/portal"
+  to = "/portal.html"
+  status = 200
+
+[[redirects]]
+  from = "/react-portal"
+  to = "/portal.html"
+  status = 200
+
+# Default fallback to real website landing page
 [[redirects]]
   from = "/*"
   to = "/index.html"

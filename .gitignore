@@ -48,6 +48,7 @@ target/
 # ==============================================================================
 node_modules/
 client/node_modules/
+dist/
 client/dist/
 .netlify/
 npm-debug.log*

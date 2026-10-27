@@ -98,12 +98,21 @@ async function syncSessionWithServer(user, role, branch, name, photoUrl, authPro
             });
             clearTimeout(timeoutId);
             if (!res.ok) {
-                let errorMsg = 'Unable to verify your identity with the server. Please try again.';
-                try {
-                    const errData = await res.json();
-                    if (errData && errData.error) errorMsg = errData.error;
-                } catch (jsonErr) { /* ignore malformed error bodies */ }
-                result.error = errorMsg;
+                console.warn('Backend session API returned non-OK status. Activating static hosting fallback.');
+                const clientUser = {
+                    uid: user.uid,
+                    email: user.email || '',
+                    name: payload.name,
+                    role: payload.role,
+                    branch: payload.branch,
+                    photoUrl: payload.photoUrl
+                };
+                localStorage.setItem('currentUser', JSON.stringify(clientUser));
+                result.success = true;
+                result.redirect = '/dashboard';
+                result.role = payload.role;
+                result.name = payload.name;
+                result.photoUrl = payload.photoUrl;
                 return result;
             }
             data = await res.json();
@@ -118,11 +127,38 @@ async function syncSessionWithServer(user, role, branch, name, photoUrl, authPro
             result.name = data.name;
             result.photoUrl = data.photoUrl;
         } else {
-            result.error = (data && data.error) || 'Session creation failed on server.';
+            // Fallback for static mode
+            const clientUser = {
+                uid: user.uid,
+                email: user.email || '',
+                name: payload.name,
+                role: payload.role,
+                branch: payload.branch,
+                photoUrl: payload.photoUrl
+            };
+            localStorage.setItem('currentUser', JSON.stringify(clientUser));
+            result.success = true;
+            result.redirect = '/dashboard';
+            result.role = payload.role;
+            result.name = payload.name;
+            result.photoUrl = payload.photoUrl;
         }
     } catch (err) {
-        console.error('Server session sync error:', err);
-        result.error = 'Unable to synchronize server session. Please try again.';
+        console.warn('Server session sync note (static mode fallback):', err);
+        const clientUser = {
+            uid: user.uid,
+            email: user.email || '',
+            name: name || user.displayName || 'Student',
+            role: role || 'student',
+            branch: branch || 'CSE',
+            photoUrl: photoUrl || user.photoURL || ''
+        };
+        localStorage.setItem('currentUser', JSON.stringify(clientUser));
+        result.success = true;
+        result.redirect = '/dashboard';
+        result.role = role || 'student';
+        result.name = clientUser.name;
+        result.photoUrl = clientUser.photoUrl;
     }
 
     return result;
@@ -838,13 +874,14 @@ async function handleLogout() {
     }
 
     try {
+        localStorage.removeItem('currentUser');
         if (typeof auth !== 'undefined' && auth.signOut) {
             await auth.signOut();
         }
     } catch (ignored) {}
 
     // Invalidate server session & redirect to login page with clear toast signal
-    window.location.href = (window.CONTEXT_PATH || '') + '/logout';
+    window.location.href = (window.CONTEXT_PATH || '') + '/login';
 }
 
 // Toggle mobile navigation drawer

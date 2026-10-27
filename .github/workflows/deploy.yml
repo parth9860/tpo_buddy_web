@@ -47,24 +47,29 @@ jobs:
         working-directory: client
         run: npm ci
 
-      - name: Build Frontend for Production
+      - name: Build React Portal
         working-directory: client
         run: npm run build
 
+      - name: Compile Complete TPO Buddy Website
+        run: |
+          echo "Building complete real TPO Buddy website from src/main/webapp..."
+          node scripts/build-static-site.mjs
+
       - name: Verify Production Build Output
         run: |
-          if [ ! -f "client/dist/index.html" ]; then
-            echo "::error::Build verification failed: client/dist/index.html was not generated!"
+          if [ ! -f "dist/index.html" ]; then
+            echo "::error::Build verification failed: dist/index.html was not generated!"
             exit 1
           fi
-          echo "✓ Production build verified. Output directory contents:"
-          ls -la client/dist/
+          echo "✓ Complete website built. Output directory contents:"
+          ls -la dist/
 
       - name: Upload Production Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: netlify-production-dist
-          path: client/dist/
+          path: dist/
           retention-days: 7
 
   deploy:
@@ -79,7 +84,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: netlify-production-dist
-          path: client/dist
+          path: dist
 
       - name: Check Netlify Deployment Credentials
         id: check-secrets
@@ -98,10 +103,10 @@ jobs:
 
       - name: Verify Production Build Artifact
         run: |
-          echo "Verifying files in client/dist:"
-          ls -la client/dist
-          if [ ! -f "client/dist/index.html" ]; then
-            echo "::error::Build verification failed: client/dist/index.html was not found in artifact!"
+          echo "Verifying files in dist:"
+          ls -la dist
+          if [ ! -f "dist/index.html" ]; then
+            echo "::error::Build verification failed: dist/index.html was not found in artifact!"
             exit 1
           fi
 
@@ -118,10 +123,10 @@ jobs:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         run: |
-          echo "Deploying production build to Netlify..."
+          echo "Deploying complete TPO Buddy website to Netlify..."
           netlify deploy \
             --prod \
-            --dir=client/dist \
+            --dir=dist \
             --no-build \
             --site="$NETLIFY_SITE_ID" \
             --auth="$NETLIFY_AUTH_TOKEN" \
