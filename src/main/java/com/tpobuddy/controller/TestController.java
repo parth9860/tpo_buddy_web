@@ -41,13 +41,17 @@ public class TestController {
 
     private final FirebaseService firebaseService;
     private final PlacementTestService placementTestService;
+    private final com.tpobuddy.service.TestSeriesService testSeriesService;
 
     // Active session tracking: key = userId, value = ActiveExamSession
     private static final Map<String, ActiveExamSession> ACTIVE_SESSIONS = new ConcurrentHashMap<>();
 
-    public TestController(FirebaseService firebaseService, PlacementTestService placementTestService) {
+    public TestController(FirebaseService firebaseService,
+                          PlacementTestService placementTestService,
+                          com.tpobuddy.service.TestSeriesService testSeriesService) {
         this.firebaseService = firebaseService;
         this.placementTestService = placementTestService;
+        this.testSeriesService = testSeriesService;
     }
 
     public static class ActiveExamSession {
@@ -90,10 +94,14 @@ public class TestController {
 
         List<TestAttempt> attempts = firebaseService.fetchTestAttempts(user.getUid());
         List<PlacementTest> availableTests = placementTestService.getAllTests();
+        List<com.tpobuddy.model.TestSeries> collegeSeries = testSeriesService.getSeriesByCategory(com.tpobuddy.model.TestSeries.CATEGORY_COLLEGE);
+        List<com.tpobuddy.model.TestSeries> platformSeries = testSeriesService.getSeriesByCategory(com.tpobuddy.model.TestSeries.CATEGORY_PLATFORM);
 
         model.addAttribute("user", user);
         model.addAttribute("attempts", attempts != null ? attempts : Collections.emptyList());
         model.addAttribute("availableTests", availableTests);
+        model.addAttribute("collegeSeries", collegeSeries);
+        model.addAttribute("platformSeries", platformSeries);
         model.addAttribute("categories", PlacementQuestionBank.getCategoriesMetadata());
         model.addAttribute("totalQuestionBankSize", PlacementQuestionBank.getTotalQuestionCount());
 
@@ -485,5 +493,40 @@ public class TestController {
         result.add("reviews", reviews);
 
         return ResponseEntity.ok(result.toString());
+    }
+
+    @GetMapping(value = "/api/test-results", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<String> getTestResults(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        User user = (session != null) ? (User) session.getAttribute("currentUser") : null;
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("{\"success\":false,\"error\":\"Unauthorized\"}");
+        }
+        List<TestAttempt> attempts = firebaseService.fetchTestAttempts(user.getUid());
+        JsonObject resp = new JsonObject();
+        resp.addProperty("success", true);
+        resp.add("results", new Gson().toJsonTree(attempts));
+        return ResponseEntity.ok(resp.toString());
+    }
+
+    @GetMapping(value = "/api/test-results/{resultId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<String> getTestResultById(@PathVariable("resultId") String resultId, HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        User user = (session != null) ? (User) session.getAttribute("currentUser") : null;
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("{\"success\":false,\"error\":\"Unauthorized\"}");
+        }
+        List<TestAttempt> attempts = firebaseService.fetchTestAttempts(user.getUid());
+        for (TestAttempt att : attempts) {
+            if (resultId.equals(att.getId()) || (att.getId() != null && att.getId().contains(resultId))) {
+                JsonObject resp = new JsonObject();
+                resp.addProperty("success", true);
+                resp.add("result", new Gson().toJsonTree(att));
+                return ResponseEntity.ok(resp.toString());
+            }
+        }
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body("{\"success\":false,\"error\":\"Result not found\"}");
     }
 }

@@ -542,40 +542,64 @@ curl -X GET http://localhost:8085/api/admin/questions/gemini/status
 
 ---
 
-## 🎯 Company Placement Preparation Test Series
+## 🎯 AI-Powered Test Series System Architecture
 
-### 1. Structure & Sections
-The test series contains four core preparation modules designed to maximize campus placement readiness:
+### 1. Dual-Track Category Separation
+The test series system provides two strictly isolated test tracks:
 
-1. **Section 1: Quantitative Aptitude**
-   - **Priority Foundational Topics**: Number System, HCF and LCM, Divisibility Rules, Percentages, Profit and Loss, Discounts.
-   - **Comprehensive Syllabus**: Ratio & Proportion, Averages, Mixtures & Alligation, Simple & Compound Interest, Time & Work, Pipes & Cisterns, Time Speed & Distance, Trains, Boats & Streams, Permutations & Combinations, Probability, Algebra, Mensuration, Data Interpretation.
-2. **Section 2: Logical Reasoning**
-   - Number Series, Letter Series, Pattern Recognition, Coding-Decoding, Blood Relations, Direction Sense, Linear & Circular Seating Arrangements, Syllogisms, Logical Puzzles, Ranking & Order, Calendars, Clocks, Data Sufficiency.
-3. **Section 3: Verbal Ability**
-   - Grammar & Error Spotting, Sentence Correction, Synonyms & Antonyms, Idioms & Phrases, Reading Comprehension, Para Jumbles, Fill in the Blanks.
-4. **Section 4: Technical and Coding**
-   - **Programming Fundamentals**: Core Java Basics, C, Python, Output Prediction, Conditions & Loops, Arrays & Strings.
-   - **Computer Science Fundamentals**: Data Structures & Algorithms, DBMS, SQL Queries, Operating Systems, Computer Networks.
-   - **Coding Practice**: Easy & medium problem solving challenges.
-5. **Full-Length Mock & Company Specific Tests**: TCS NQT, Infosys, Wipro, and Accenture recruitment formats.
+#### A. College Test Series (`CATEGORY_COLLEGE`)
+Designed for college examinations, departmental assessments, and SNJB placement preparation:
+- **Series 1: SNJB Placement Preparation**:
+  - **Full 4-Section Mock**: Standardized 30-question assessment with explicit section balancing:
+    * Quantitative Aptitude (8 questions)
+    * Logical Reasoning (8 questions)
+    * Verbal Ability (7 questions, with reading comprehension passages)
+    * Technical and Coding (7 questions, with code output prediction)
+  - **Sectional Tests**: Dedicated 30-question, 30-minute deep-dives for each of the 4 sections.
+  - **Foundational Priority Drills**: Quick 10-question practice drills for high-frequency placement topics (*Number System, HCF/LCM, Divisibility Rules, Percentages, Profit and Loss, Discounts*).
+- **Series 2: Basic Computer Science Tests (12 Subjects)**:
+  - Individual subject tests for: *Programming Fundamentals, Object-Oriented Programming (OOP), Data Structures and Algorithms (DSA), DBMS and SQL, Operating Systems, Computer Networks, Software Engineering, Computer Organization and Architecture (COA), Java Programming, Python Programming, C Programming, Problem Solving and Output Prediction*.
+- **Series 3: College-Specific & Departmental Tests**:
+  - Extensible assessments created by authorized faculty or tailored to college curricula.
 
-### 2. High-Performance In-Memory Question Architecture
-- High-speed in-memory repository (`PlacementQuestionBank`) preloaded with verified questions.
-- Eliminates latency during active test-taking.
-- Full step-by-step mathematical explanations and verified logic for every solution.
+#### B. Platform Test Series (`CATEGORY_PLATFORM`)
+Independent competitive skill tracks to build technical depth, consistency, and problem-solving performance:
+- 13 self-paced practice tracks: *Aptitude Practice, Logical Reasoning Practice, Verbal Ability Practice, Programming Practice, DSA Practice, DBMS and SQL Practice, Operating Systems Practice, Computer Networks Practice, Java and OOP Practice, Mixed Computer Science Tests, Coding Challenges, Weak Topic Improvement Tests, Personalized Revision Tests*.
 
-### 3. Test Security & Proctoring Guardrails
-- **Mandatory Fullscreen**: Hides browser distractions and prevents multitasking.
-- **Three-Strike Rule**: Debounced detection of window blur, tab switching, and fullscreen exit. Reaching 3 violations triggers automatic auto-submission.
-- **Timer Resilience**: Timer values and answers persist through page reloads and refreshes.
-- **Answer Key Integrity**: Student attempts cannot view answers or solutions until completion and server-side evaluation.
+---
 
-### 4. Admin Management & CSV Import/Export
-- Access route: `/faculty#snjb-management` or `/admin`
-- Full test lifecycle: Create, Edit, Duplicate, Toggle Status (Published/Draft), and Delete tests.
-- Bulk question CSV upload: Supported via Multipart File (`/api/snjb/admin/questions/import-csv`) or JSON string (`/api/snjb/admin/questions/import-csv-text`).
-- Student attempt export: One-click export to CSV (`/api/snjb/admin/export-results`).
+### 2. Difficulty Levels & Calibration
+Every test supports 3 difficulty levels selectable before generation:
+- **Medium** (Default): Fundamental placement concepts, standard formulas, and direct applications.
+- **Hard**: Multistep reasoning, moderate algorithmic complexity, and applied technical concepts.
+- **Extra Hard**: Advanced reasoning, complex problem-solving, tricky output prediction, and edge cases.
+
+---
+
+### 3. AI Question Generation & Selection Pipeline (50 → 30)
+1. **Request Validation**: Verifies authentication context, valid series, topic, difficulty, and idempotency key.
+2. **AI Candidate Generation**: Requests a pool of **50 candidate questions** using Google Gemini AI (`gemini-flash-lite-latest`) in resilient parallel batches.
+3. **Structured Validation**: Rejects malformed JSON, missing options, out-of-bounds answers, leaked answers in question statements, and duplicate questions.
+4. **Question Selection (30 Questions)**: Cryptographically shuffles (`SecureRandom`) and selects exactly 30 questions matching topic and section weights. The remaining 20 candidate questions are safely discarded.
+5. **Answer Key Protection**: Student-facing endpoints (`GET /api/test-attempts/{attemptId}/questions`) return sanitized questions where `correctOption` is set to `-1` and `explanation` is empty. Answer keys remain encrypted on the server until submission.
+6. **Authoritative Evaluation**: Upon submission, scores and analytics (accuracy %, section breakdown, topic accuracy, weak topics) are calculated server-side and persisted to Firebase (`test_attempts` and `student_metrics`).
+7. **Retention & Cleanup**: Expired and temporary attempts are cleaned up automatically by scheduled background jobs.
+
+---
+
+### 4. REST API Endpoints
+
+| Method | Endpoint | Description | Auth Required |
+|---|---|---|---|
+| `GET` | `/api/test-series?category=COLLEGE\|PLATFORM` | List available test series by category | Yes |
+| `GET` | `/api/test-series/{seriesId}` | Retrieve detailed series syllabus and weights | Yes |
+| `POST` | `/api/test-attempts` | Initiate test attempt & trigger AI generation (50→30) | Yes (Student) |
+| `GET` | `/api/test-attempts/{attemptId}/status` | Poll AI question generation progress | Yes (Owner) |
+| `GET` | `/api/test-attempts/{attemptId}/questions` | Fetch 30 sanitized questions (Zero answer leaks!) | Yes (Owner) |
+| `POST` | `/api/test-attempts/{attemptId}/save-progress` | Autosave ongoing answers | Yes (Owner) |
+| `POST` | `/api/test-attempts/{attemptId}/log-event` | Log proctoring integrity events (tab switch, etc.) | Yes (Owner) |
+| `POST` | `/api/test-attempts/{attemptId}/submit` | Authoritative server grading & analytics evaluation | Yes (Owner) |
+| `GET` | `/api/test-results` | Fetch student completed test results & weak topics | Yes (Student) |
 
 ### 5. Test Checklist for Student & Admin Workflows
 - [x] **Student Login**: Sign in at `/login.jsp` with student credentials.

@@ -21,6 +21,12 @@ public class Question implements Serializable {
     private String explanation;
     private int marks = 1;
 
+    // AI Test Series Extended Fields
+    private String questionType = "MCQ"; // "MCQ", "OUTPUT_PREDICTION", "READING_COMPREHENSION", "CODING_PROBLEM"
+    private String passageOrCode = ""; // Passage text for RC or Code block for Output Prediction
+    private String section = ""; // Section in multi-section exam
+    private int displayOrder = 0;
+
     public Question() {
     }
 
@@ -135,5 +141,37 @@ public class Question implements Serializable {
 
     public void setMarks(int marks) {
         this.marks = marks;
+    }
+
+    public String getQuestionType() {
+        return questionType != null ? questionType : "MCQ";
+    }
+
+    public void setQuestionType(String questionType) {
+        this.questionType = questionType;
+    }
+
+    public String getPassageOrCode() {
+        return passageOrCode != null ? passageOrCode : "";
+    }
+
+    public void setPassageOrCode(String passageOrCode) {
+        this.passageOrCode = passageOrCode;
+    }
+
+    public String getSection() {
+        return section != null ? section : "";
+    }
+
+    public void setSection(String section) {
+        this.section = section;
+    }
+
+    public int getDisplayOrder() {
+        return displayOrder;
+    }
+
+    public void setDisplayOrder(int displayOrder) {
+        this.displayOrder = displayOrder;
     }
 }

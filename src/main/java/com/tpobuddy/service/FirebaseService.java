@@ -682,6 +682,13 @@ public class FirebaseService {
         json.addProperty("sectionBreakdownJson", attempt.getSectionBreakdownJson());
         json.addProperty("weakTopicsJson", attempt.getWeakTopicsJson());
         json.addProperty("recommendedPractice", attempt.getRecommendedPractice());
+        json.addProperty("seriesId", attempt.getSeriesId() != null ? attempt.getSeriesId() : "");
+        json.addProperty("difficulty", attempt.getDifficulty() != null ? attempt.getDifficulty() : "Medium");
+        json.addProperty("generationStartedAt", attempt.getGenerationStartedAt());
+        json.addProperty("generatedAt", attempt.getGeneratedAt());
+        json.addProperty("expiresAt", attempt.getExpiresAt());
+        json.addProperty("selectedQuestionCount", attempt.getSelectedQuestionCount());
+        json.addProperty("generationVersion", attempt.getGenerationVersion());
 
         String userUrl = databaseUrl + "/test_attempts/" + uid + "/" + attemptId + ".json";
         String globalUrl = databaseUrl + "/all_test_attempts/" + attemptId + ".json";
@@ -823,6 +830,8 @@ public class FirebaseService {
             fields.add("fullscreenExitCount", makeIntegerField(attempt.getFullscreenExitCount()));
             fields.add("cameraDisconnectCount", makeIntegerField(attempt.getCameraDisconnectCount()));
             fields.add("copyPasteCount", makeIntegerField(attempt.getCopyPasteCount()));
+            fields.add("seriesId", makeStringField(attempt.getSeriesId() != null ? attempt.getSeriesId() : ""));
+            fields.add("difficulty", makeStringField(attempt.getDifficulty() != null ? attempt.getDifficulty() : "Medium"));
 
             StringBuilder maskParams = new StringBuilder();
             for (String fieldName : fields.keySet()) {
@@ -913,6 +922,13 @@ public class FirebaseService {
         t.setSectionBreakdownJson(getString(obj, "sectionBreakdownJson", "{}"));
         t.setWeakTopicsJson(getString(obj, "weakTopicsJson", "[]"));
         t.setRecommendedPractice(getString(obj, "recommendedPractice", ""));
+        t.setSeriesId(getString(obj, "seriesId", ""));
+        t.setDifficulty(getString(obj, "difficulty", "Medium"));
+        if (obj.has("generationStartedAt")) t.setGenerationStartedAt(obj.get("generationStartedAt").getAsLong());
+        if (obj.has("generatedAt")) t.setGeneratedAt(obj.get("generatedAt").getAsLong());
+        if (obj.has("expiresAt")) t.setExpiresAt(obj.get("expiresAt").getAsLong());
+        t.setSelectedQuestionCount(getInt(obj, "selectedQuestionCount", t.getTotalQuestions()));
+        t.setGenerationVersion(getInt(obj, "generationVersion", 1));
         return t;
     }
 

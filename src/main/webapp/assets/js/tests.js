@@ -1,13 +1,14 @@
 /**
- * TPO Buddy — Company Placement Preparation Test Series Engine
- * Full-featured interactive examination system with:
- * - Pre-test instruction & camera verification
- * - Mandatory Fullscreen enforcement
- * - Three-Strike Security Rule (tab switch & fullscreen exit detection)
- * - Persistent countdown timer across page reloads
- * - Dynamic Question Palette (Answered, Unanswered, Marked for Review)
- * - Auto-submission on timer expiry or 3rd security strike
- * - Instant server grading with detailed step-by-step solution review
+ * TPO Buddy — AI-Powered Test Series Engine
+ * Features:
+ * - Dynamic Gemini AI candidate question generation (50 candidate pool -> 30 selected questions)
+ * - Difficulty calibration (Medium, Hard, Extra Hard)
+ * - Structured syllabus topic balance & passage / code snippet support
+ * - Proctoring: Mandatory Fullscreen enforcement, webcam pip, 3-strike tab switch detection
+ * - State resilience & persistent timer across page reloads
+ * - Dynamic 30-Question Palette (Answered, Unanswered, Marked for Review)
+ * - Server-side authoritative grading & topic-wise performance analytics
+ * - Weak topic identification & targeted revision recommendations
  */
 
 let activeAttemptId = null;
@@ -16,16 +17,19 @@ let currentIndex = 0;
 let userAnswers = {};
 let markedForReview = new Set();
 let timerInterval = null;
-let remainingSeconds = 1800; // 30 mins default
+let remainingSeconds = 1800; // 30 mins standard
 let cameraStream = null;
-let selectedCategory = 'Quantitative Aptitude';
-let selectedTopic = null;
-let selectedTestId = null;
-let selectedCount = 25;
+let selectedSeriesId = 'college_snjb_full_mock';
+let selectedTitle = 'SNJB Placement Preparation Assessment';
+let selectedCategory = 'COLLEGE';
+let selectedSubject = 'Multi-Section Assessment';
+let selectedTopics = null;
+let selectedDifficulty = 'Medium';
 let isSubmitting = false;
 let violationCount = 0;
 let lastViolationTime = 0;
 let watchdogsAttached = false;
+let pollingInterval = null;
 
 window.stopProctorWebcam = function() {
     if (cameraStream) {
@@ -39,22 +43,36 @@ window.stopProctorWebcam = function() {
 };
 
 // -------------------------------------------------------------
-// Pre-flight Instructions & Camera Check
+// Pre-flight Instructions, Difficulty Selection & Camera Check
 // -------------------------------------------------------------
 
-function initiateExamSetup(category, count = 25, testId = null, topic = null) {
-    selectedCategory = category;
-    selectedCount = count;
-    selectedTestId = testId;
-    selectedTopic = topic;
+function initiateExamSetup(seriesOrCat, titleOrCount, categoryOrTestId, subjectOrTopic, defaultTopic = null) {
+    if (typeof titleOrCount === 'string') {
+        // New API: initiateExamSetup(seriesId, title, category, subject, topics)
+        selectedSeriesId = seriesOrCat || 'college_snjb_full_mock';
+        selectedTitle = titleOrCount || 'Assessment';
+        selectedCategory = categoryOrTestId || 'COLLEGE';
+        selectedSubject = subjectOrTopic || 'General';
+        selectedTopics = defaultTopic;
+    } else {
+        // Backward compatibility: initiateExamSetup(category, count, testId, topic)
+        selectedCategory = seriesOrCat || 'COLLEGE';
+        selectedSeriesId = categoryOrTestId || 'college_snjb_quant';
+        selectedTitle = defaultTopic || subjectOrTopic || selectedCategory;
+        selectedSubject = selectedCategory;
+        selectedTopics = defaultTopic || subjectOrTopic;
+    }
+
+    selectedDifficulty = 'Medium';
+    selectDifficulty('Medium');
 
     const modalTitle = document.getElementById('setupModalTitle');
     if (modalTitle) {
-        modalTitle.textContent = `${topic ? topic : category} — Assessment Setup`;
+        modalTitle.textContent = `${selectedTitle} — Assessment Setup`;
     }
     const catDetail = document.getElementById('setupCategoryDetail');
     if (catDetail) {
-        catDetail.textContent = `${category} • ${topic ? topic + ' • ' : ''}${count} Questions • ${count <= 10 ? '15' : '30'} Minutes`;
+        catDetail.textContent = `${selectedCategory} • ${selectedSubject} • 30 Questions • 30 Minutes`;
     }
 
     const consent = document.getElementById('examConsentCheckbox');
@@ -63,7 +81,7 @@ function initiateExamSetup(category, count = 25, testId = null, topic = null) {
     const startBtn = document.getElementById('btnStartExamConfirmed');
     if (startBtn) {
         startBtn.disabled = true;
-        startBtn.textContent = 'Start Placement Test →';
+        startBtn.textContent = 'Generate & Start AI Test →';
     }
 
     const preview = document.getElementById('setupWebcamPreview');
@@ -87,6 +105,25 @@ function cancelExamSetup() {
     const modal = document.getElementById('examSetupModal');
     if (modal) modal.classList.remove('active');
     window.stopProctorWebcam();
+}
+
+function selectDifficulty(diff) {
+    selectedDifficulty = diff;
+    const cards = {
+        'Medium': document.getElementById('diffCardMedium'),
+        'Hard': document.getElementById('diffCardHard'),
+        'Extra Hard': document.getElementById('diffCardExtraHard')
+    };
+
+    Object.keys(cards).forEach(key => {
+        if (cards[key]) {
+            if (key === diff) {
+                cards[key].classList.add('active');
+            } else {
+                cards[key].classList.remove('active');
+            }
+        }
+    });
 }
 
 async function requestWebcamVerification() {
@@ -128,60 +165,158 @@ function handleConsentChange(checkbox) {
 }
 
 // -------------------------------------------------------------
-// Launch Assessment in Fullscreen
+// Launch Assessment in Fullscreen with AI Question Generation
 // -------------------------------------------------------------
 
 async function startExamInFullscreen() {
-    const modal = document.getElementById('examSetupModal');
-    if (modal) modal.classList.remove('active');
+    const setupModal = document.getElementById('examSetupModal');
+    if (setupModal) setupModal.classList.remove('active');
 
-    try {
-        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-            await document.documentElement.requestFullscreen();
-        }
-    } catch (e) {
-        console.warn('Fullscreen request bypassed:', e);
-    }
+    // Show AI Generation Loading Modal
+    showAiLoadingModal();
 
-    // Launch test on backend
     try {
         const payload = {
+            seriesId: selectedSeriesId,
+            difficulty: selectedDifficulty,
             category: selectedCategory,
-            topic: selectedTopic,
-            testId: selectedTestId,
-            count: selectedCount
+            subject: selectedSubject,
+            selectedTopics: selectedTopics ? [selectedTopics] : []
         };
 
-        const res = await fetch(`${window.CONTEXT_PATH}/api/tests/start`, {
+        const res = await fetch(`${window.CONTEXT_PATH}/api/test-attempts`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
         const data = await res.json();
-        if (data.success && data.questions && data.questions.length > 0) {
+        if (data.success && data.attemptId) {
             activeAttemptId = data.attemptId;
+
+            if (data.status === 'READY') {
+                await fetchAndLaunchQuestions(activeAttemptId);
+            } else {
+                // Poll attempt generation status
+                pollGenerationStatus(activeAttemptId);
+            }
+        } else {
+            hideAiLoadingModal();
+            alert('Failed to initiate AI test generation: ' + (data.message || data.error || 'Server error'));
+        }
+    } catch (err) {
+        hideAiLoadingModal();
+        alert('Network error connecting to test series engine.');
+    }
+}
+
+function showAiLoadingModal() {
+    const modal = document.getElementById('aiGenLoadingModal');
+    if (modal) {
+        const label = document.getElementById('aiLoadingSeriesLabel');
+        if (label) label.textContent = `${selectedTitle} • ${selectedDifficulty} Difficulty`;
+
+        const status = document.getElementById('aiLoadingStatusText');
+        if (status) status.textContent = 'Step 1/4: Contacting Gemini AI to generate 50 candidate questions...';
+
+        const bar = document.getElementById('aiProgressBar');
+        if (bar) bar.style.width = '25%';
+
+        modal.classList.add('active');
+    }
+}
+
+function hideAiLoadingModal() {
+    const modal = document.getElementById('aiGenLoadingModal');
+    if (modal) modal.classList.remove('active');
+    clearInterval(pollingInterval);
+}
+
+function pollGenerationStatus(attemptId) {
+    let pollCount = 0;
+    const maxPolls = 60; // 60 * 1.5s = 90s max
+
+    clearInterval(pollingInterval);
+    pollingInterval = setInterval(async () => {
+        pollCount++;
+        try {
+            const res = await fetch(`${window.CONTEXT_PATH}/api/test-attempts/${attemptId}/status`);
+            const data = await res.json();
+
+            const statusText = document.getElementById('aiLoadingStatusText');
+            const bar = document.getElementById('aiProgressBar');
+
+            if (pollCount > 2 && pollCount < 5) {
+                if (statusText) statusText.textContent = 'Step 2/4: Validating structured JSON, non-empty options, and correctness...';
+                if (bar) bar.style.width = '55%';
+            } else if (pollCount >= 5 && pollCount < 8) {
+                if (statusText) statusText.textContent = 'Step 3/4: Selecting 30 balanced questions mapped to syllabus topic weights...';
+                if (bar) bar.style.width = '80%';
+            } else if (pollCount >= 8) {
+                if (statusText) statusText.textContent = 'Step 4/4: Isolating secure attempt and encrypting server-side answer keys...';
+                if (bar) bar.style.width = '95%';
+            }
+
+            if (data.status === 'READY') {
+                clearInterval(pollingInterval);
+                if (bar) bar.style.width = '100%';
+                await fetchAndLaunchQuestions(attemptId);
+            } else if (data.status === 'FAILED') {
+                clearInterval(pollingInterval);
+                hideAiLoadingModal();
+                alert('Question generation failed: ' + (data.errorMessage || 'Unknown error. Please retry.'));
+            } else if (pollCount >= maxPolls) {
+                clearInterval(pollingInterval);
+                hideAiLoadingModal();
+                alert('Generation request timed out. Please try again or choose standard practice.');
+            }
+        } catch (e) {
+            console.warn('Error polling status:', e);
+        }
+    }, 1500);
+}
+
+async function fetchAndLaunchQuestions(attemptId) {
+    try {
+        const res = await fetch(`${window.CONTEXT_PATH}/api/test-attempts/${attemptId}/questions`);
+        const data = await res.json();
+
+        if (data.success && data.questions && data.questions.length > 0) {
+            hideAiLoadingModal();
+
+            // Request fullscreen
+            try {
+                if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+                    await document.documentElement.requestFullscreen();
+                }
+            } catch (e) {
+                console.warn('Fullscreen request bypassed:', e);
+            }
+
+            activeAttemptId = attemptId;
             currentQuestions = data.questions;
             currentIndex = 0;
             userAnswers = {};
             markedForReview = new Set();
             violationCount = 0;
-            remainingSeconds = data.durationSeconds || (currentQuestions.length <= 10 ? 900 : 1800);
+            remainingSeconds = (data.durationMinutes ? data.durationMinutes * 60 : 1800);
 
-            switchToExamRunnerView(data.category, data.topic);
+            switchToExamRunnerView(selectedCategory, selectedTitle, selectedDifficulty);
             startTimerCountdown();
             attachSecurityWatchdogs();
             renderQuestionPalette();
             renderCurrentQuestion();
         } else {
-            alert('Failed to initialize test questions: ' + (data.error || 'Unknown error'));
+            hideAiLoadingModal();
+            alert('Failed to retrieve test questions from secure session.');
         }
-    } catch (err) {
-        alert('Network error launching assessment test.');
+    } catch (e) {
+        hideAiLoadingModal();
+        alert('Network error retrieving examination questions.');
     }
 }
 
-function switchToExamRunnerView(category, topic) {
+function switchToExamRunnerView(category, title, difficulty) {
     const picker = document.getElementById('testCategoryPicker');
     const runner = document.getElementById('testRunner');
     const resultCard = document.getElementById('testResultCard');
@@ -191,7 +326,13 @@ function switchToExamRunnerView(category, topic) {
     if (runner) runner.style.display = 'block';
 
     const catEl = document.getElementById('runnerCategoryBadge');
-    if (catEl) catEl.textContent = topic ? `${category} • ${topic}` : category;
+    if (catEl) catEl.textContent = category || 'COLLEGE';
+
+    const diffEl = document.getElementById('runnerDifficultyBadge');
+    if (diffEl) {
+        diffEl.textContent = difficulty || 'Medium';
+        diffEl.className = 'badge ' + (difficulty === 'Hard' ? 'badge-warning' : (difficulty === 'Extra Hard' ? 'badge-danger' : 'badge-primary'));
+    }
 
     // Pip camera
     const pip = document.getElementById('examWebcamPip');
@@ -218,17 +359,63 @@ function renderCurrentQuestion() {
 
     const diffEl = document.getElementById('runnerDifficultyBadge');
     if (diffEl) {
-        diffEl.textContent = q.difficulty || 'Medium';
-        diffEl.className = 'badge ' + (q.difficulty === 'Easy' ? 'badge-success' : (q.difficulty === 'Hard' ? 'badge-danger' : 'badge-primary'));
+        diffEl.textContent = q.difficulty || selectedDifficulty || 'Medium';
+        diffEl.className = 'badge ' + (q.difficulty === 'Hard' ? 'badge-warning' : (q.difficulty === 'Extra Hard' ? 'badge-danger' : 'badge-primary'));
+    }
+
+    const typeBadge = document.getElementById('runnerQuestionTypeBadge');
+    if (typeBadge) {
+        if (q.questionType === 'OUTPUT_PREDICTION') {
+            typeBadge.textContent = '💻 Code Output';
+            typeBadge.className = 'badge badge-warning';
+            typeBadge.style.display = 'inline-block';
+        } else if (q.questionType === 'READING_COMPREHENSION') {
+            typeBadge.textContent = '📖 Comprehension';
+            typeBadge.className = 'badge badge-secondary';
+            typeBadge.style.display = 'inline-block';
+        } else {
+            typeBadge.style.display = 'none';
+        }
     }
 
     const marksEl = document.getElementById('runnerMarksBadge');
     if (marksEl) marksEl.textContent = `+${q.marks || 2} Marks`;
 
+    const sectionEl = document.getElementById('runnerSectionIndicator');
+    if (sectionEl) {
+        sectionEl.textContent = `Section: ${q.section || selectedSubject || selectedCategory}`;
+    }
+
     // Statement
     const statementEl = document.getElementById('runnerQuestionStatement');
     if (statementEl) {
         statementEl.textContent = q.question;
+    }
+
+    // Passage or Code Snippet Block
+    const passageContainer = document.getElementById('runnerPassageCodeContainer');
+    if (passageContainer) {
+        if (q.passageOrCode && q.passageOrCode.trim().length > 0) {
+            passageContainer.style.display = 'block';
+            if (q.questionType === 'READING_COMPREHENSION') {
+                passageContainer.innerHTML = `
+                    <div class="reading-passage-box">
+                        <strong style="display: block; margin-bottom: 0.5rem; color: var(--primary);">📖 Reading Comprehension Passage:</strong>
+                        ${escapeHtml(q.passageOrCode).replace(/\\n/g, '<br/>')}
+                    </div>
+                `;
+            } else {
+                passageContainer.innerHTML = `
+                    <div class="passage-code-box">
+                        <span class="passage-code-badge">Code Snippet / Program</span>
+                        <pre><code>${escapeHtml(q.passageOrCode)}</code></pre>
+                    </div>
+                `;
+            }
+        } else {
+            passageContainer.style.display = 'none';
+            passageContainer.innerHTML = '';
+        }
     }
 
     // Options
@@ -264,7 +451,7 @@ function renderCurrentQuestion() {
     if (prevBtn) prevBtn.disabled = (currentIndex === 0);
     if (nextBtn) {
         if (currentIndex === total - 1) {
-            nextBtn.textContent = 'Review All →';
+            nextBtn.textContent = 'Review & Submit →';
         } else {
             nextBtn.textContent = 'Next Question →';
         }
@@ -294,11 +481,13 @@ function selectOption(optIndex) {
     renderQuestionPalette();
 
     // Autosave progress asynchronously
-    fetch(`${window.CONTEXT_PATH}/api/tests/save-progress`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers: userAnswers })
-    }).catch(() => {});
+    if (activeAttemptId) {
+        fetch(`${window.CONTEXT_PATH}/api/test-attempts/${activeAttemptId}/save-progress`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ answers: userAnswers })
+        }).catch(() => {});
+    }
 }
 
 function clearCurrentResponse() {
@@ -306,6 +495,14 @@ function clearCurrentResponse() {
     delete userAnswers[q.id];
     renderCurrentQuestion();
     renderQuestionPalette();
+
+    if (activeAttemptId) {
+        fetch(`${window.CONTEXT_PATH}/api/test-attempts/${activeAttemptId}/save-progress`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ answers: userAnswers })
+        }).catch(() => {});
+    }
 }
 
 function toggleMarkForReview() {
@@ -337,11 +534,13 @@ function nextQuestion() {
     if (currentIndex < currentQuestions.length - 1) {
         currentIndex++;
         renderCurrentQuestion();
+    } else {
+        confirmAndSubmitExam();
     }
 }
 
 // -------------------------------------------------------------
-// Question Palette
+// Question Palette (30 Questions)
 // -------------------------------------------------------------
 
 function renderQuestionPalette() {
@@ -461,20 +660,21 @@ function attachSecurityWatchdogs() {
 
 function triggerSecurityViolation(type, message) {
     const now = Date.now();
-    if (now - lastViolationTime < 2500) return; // Debounce rapid events
+    if (now - lastViolationTime < 2500) return; // Debounce
     lastViolationTime = now;
 
     violationCount++;
 
-    // Log to backend
-    fetch(`${window.CONTEXT_PATH}/api/tests/log-event`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: type, message: message })
-    }).catch(() => {});
+    if (activeAttemptId) {
+        fetch(`${window.CONTEXT_PATH}/api/test-attempts/${activeAttemptId}/log-event`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: type, message: message })
+        }).catch(() => {});
+    }
 
     if (violationCount >= 3) {
-        submitAssessmentTest('automatic-security-submission');
+        submitAssessmentTest('proctor_violation');
     } else {
         showSecurityWarningModal();
     }
@@ -542,12 +742,11 @@ async function submitAssessmentTest(reason = 'manual') {
 
     try {
         const payload = {
-            attemptId: activeAttemptId,
             answers: userAnswers,
             submissionReason: reason
         };
 
-        const res = await fetch(`${window.CONTEXT_PATH}/api/tests/submit`, {
+        const res = await fetch(`${window.CONTEXT_PATH}/api/test-attempts/${activeAttemptId}/submit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -557,12 +756,11 @@ async function submitAssessmentTest(reason = 'manual') {
         if (data.success) {
             renderAssessmentResult(data);
         } else {
-            alert('Submission grading error: ' + (data.error || 'Server error'));
+            alert('Submission grading error: ' + (data.message || data.error || 'Server error'));
         }
     } catch (err) {
         alert('Network error submitting test. Your answers have been preserved.');
     } finally {
-        activeAttemptId = null;
         isSubmitting = false;
     }
 }
@@ -581,19 +779,73 @@ function renderAssessmentResult(data) {
         badge.className = 'badge ' + (data.passed ? 'badge-success' : 'badge-warning');
     }
 
-    // Score
+    // Score & Accuracy
     const scoreEl = document.getElementById('resultScorePercent');
     if (scoreEl) scoreEl.textContent = `${data.score}%`;
 
+    const accEl = document.getElementById('resultAccuracyPercent');
+    if (accEl) accEl.textContent = `${Math.round(data.accuracy || 0)}%`;
+
     // Counts
     const fracEl = document.getElementById('resultCorrectFraction');
-    if (fracEl) fracEl.textContent = `${data.correctCount} / ${data.totalQuestions}`;
+    if (fracEl) fracEl.textContent = `${data.correctCount} / ${data.totalQuestions || 30}`;
 
-    // Risk
+    // Risk Display
     const riskEl = document.getElementById('resultRiskDisplay');
     if (riskEl) {
-        riskEl.textContent = `${data.riskLevel || 'LOW'} RISK (${data.proctoringStatus || 'VALIDATED'})`;
-        riskEl.style.color = (data.riskLevel === 'HIGH' ? '#dc2626' : (data.riskLevel === 'MODERATE' ? '#d97706' : '#16a34a'));
+        const riskLevel = data.riskLevel || (violationCount >= 2 ? 'MODERATE' : 'LOW');
+        riskEl.textContent = `${riskLevel} RISK`;
+        riskEl.style.color = (riskLevel === 'HIGH' ? '#dc2626' : (riskLevel === 'MODERATE' ? '#d97706' : '#16a34a'));
+    }
+
+    // Section Breakdown Grid
+    const sectionContainer = document.getElementById('resultSectionBreakdownContainer');
+    const sectionGrid = document.getElementById('resultSectionBreakdownGrid');
+    if (sectionContainer && sectionGrid) {
+        if (data.sectionBreakdown && Object.keys(data.sectionBreakdown).length > 0) {
+            sectionGrid.innerHTML = '';
+            sectionContainer.style.display = 'block';
+
+            Object.entries(data.sectionBreakdown).forEach(([secName, secData]) => {
+                const total = secData.total || 0;
+                const correct = secData.correct || 0;
+                const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+
+                const card = document.createElement('div');
+                card.style.background = '#f8fafc';
+                card.style.padding = '1rem';
+                card.style.borderRadius = 'var(--radius-sm)';
+                card.style.border = '1px solid var(--border-subtle)';
+                card.innerHTML = `
+                    <div style="font-weight: 700; color: var(--text-primary); font-size: 0.9rem; margin-bottom: 0.25rem;">${escapeHtml(secName)}</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem;">${correct} of ${total} Correct (${pct}%)</div>
+                    <div style="height: 6px; background: #e2e8f0; border-radius: 9999px; overflow: hidden;">
+                        <div style="width: ${pct}%; height: 100%; background: ${pct >= 60 ? '#10b981' : '#f59e0b'};"></div>
+                    </div>
+                `;
+                sectionGrid.appendChild(card);
+            });
+        } else {
+            sectionContainer.style.display = 'none';
+        }
+    }
+
+    // Weak Topics
+    const weakContainer = document.getElementById('resultWeakTopicsContainer');
+    const weakList = document.getElementById('resultWeakTopicsList');
+    if (weakContainer && weakList) {
+        if (data.weakTopics && data.weakTopics.length > 0) {
+            weakContainer.style.display = 'block';
+            weakList.innerHTML = '';
+            data.weakTopics.forEach(topic => {
+                const chip = document.createElement('div');
+                chip.className = 'weak-topic-chip';
+                chip.innerHTML = `<span>⚠️</span><span>${escapeHtml(topic)}</span>`;
+                weakList.appendChild(chip);
+            });
+        } else {
+            weakContainer.style.display = 'none';
+        }
     }
 
     // Render Solutions Review
@@ -605,19 +857,34 @@ function renderAssessmentResult(data) {
             card.className = `review-item-card ${r.isCorrect ? 'correct' : 'incorrect'}`;
 
             const optLetters = ['A', 'B', 'C', 'D'];
-            const userChoiceText = r.selectedOption >= 0 ? `${optLetters[r.selectedOption]}` : 'Unanswered';
-            const correctChoiceText = `${optLetters[r.correctOption]}`;
+            const userChoiceText = r.userAnswer >= 0 ? `${optLetters[r.userAnswer]}` : 'Unanswered';
+            const correctChoiceText = `${optLetters[r.correctAnswer]}`;
+
+            let passageHtml = '';
+            if (r.passageOrCode && r.passageOrCode.trim().length > 0) {
+                passageHtml = `
+                    <div class="passage-code-box" style="margin-bottom: 1rem;">
+                        <span class="passage-code-badge">Reference Code / Passage</span>
+                        <pre><code>${escapeHtml(r.passageOrCode)}</code></pre>
+                    </div>
+                `;
+            }
 
             card.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                    <span style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary);">Question ${idx + 1}</span>
+                    <div>
+                        <span style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary);">Question ${idx + 1}</span>
+                        ${r.section ? `<span class="badge badge-outline" style="font-size: 0.75rem; margin-left: 0.5rem;">${escapeHtml(r.section)}</span>` : ''}
+                        ${r.topic ? `<span class="badge badge-outline" style="font-size: 0.75rem; margin-left: 0.25rem;">${escapeHtml(r.topic)}</span>` : ''}
+                    </div>
                     <span class="badge ${r.isCorrect ? 'badge-success' : 'badge-danger'}">
-                        ${r.isCorrect ? '✓ Correct (+2)' : (r.selectedOption >= 0 ? '✗ Incorrect (0)' : '— Unanswered (0)')}
+                        ${r.isCorrect ? '✓ Correct (+2)' : (r.userAnswer >= 0 ? '✗ Incorrect (0)' : '— Unanswered (0)')}
                     </span>
                 </div>
                 <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 1rem; color: var(--text-primary); line-height: 1.5;">
                     ${escapeHtml(r.question)}
                 </div>
+                ${passageHtml}
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size: 0.85rem; margin-bottom: 1rem;">
                     <div style="background: #ffffff; padding: 0.65rem 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
                         Your Answer: <strong style="color: ${r.isCorrect ? '#16a34a' : '#dc2626'};">${userChoiceText}</strong>
@@ -628,7 +895,7 @@ function renderAssessmentResult(data) {
                 </div>
                 <div style="background: #f8fafc; border-left: 3px solid var(--primary); padding: 0.85rem 1rem; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; border-radius: 0 var(--radius-sm) var(--radius-sm) 0;">
                     <strong style="color: var(--primary); display: block; margin-bottom: 0.25rem;">Step-by-Step Solution & Concept:</strong>
-                    ${escapeHtml(r.explanation || 'Solution calculation verified by examination engine.').replace(/\n/g, '<br/>')}
+                    ${escapeHtml(r.explanation || 'Verified correct answer by assessment engine.').replace(/\\n/g, '<br/>')}
                 </div>
             `;
             reviewList.appendChild(card);
@@ -636,6 +903,10 @@ function renderAssessmentResult(data) {
     }
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function retakeCurrentAssessment() {
+    initiateExamSetup(selectedSeriesId, selectedTitle, selectedCategory, selectedSubject, selectedTopics);
 }
 
 // -------------------------------------------------------------
@@ -677,7 +948,7 @@ async function resumeActiveExamInFullscreen() {
         }
     } catch (e) {}
 
-    switchToExamRunnerView(selectedCategory, selectedTopic);
+    switchToExamRunnerView(selectedCategory, selectedTitle, selectedDifficulty);
     startTimerCountdown();
     attachSecurityWatchdogs();
     renderQuestionPalette();

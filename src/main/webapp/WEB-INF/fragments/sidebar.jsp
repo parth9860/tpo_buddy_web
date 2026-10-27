@@ -25,8 +25,8 @@
         </li>
         <li>
             <a href="${pageContext.request.contextPath}/tests" class="nav-item-link <%= currentPath.contains("tests") ? "active" : "" %>">
-                <span class="nav-icon">&#128221;</span>
-                <span>Placement Tests</span>
+                <span class="nav-icon">&#127919;</span>
+                <span>AI Test Series</span>
             </a>
         </li>
         <li>

@@ -30,6 +30,9 @@ public class PlacementQuestionBank {
         if (q.getId() <= 0) {
             q.setId(ID_COUNTER.getAndIncrement());
         }
+        if (q.getSection() == null || q.getSection().isEmpty()) {
+            q.setSection(q.getCategory() != null ? q.getCategory() : "General");
+        }
         ALL_QUESTIONS.add(q);
         QUESTION_MAP.put(q.getId(), q);
 
@@ -39,6 +42,36 @@ public class PlacementQuestionBank {
         if (q.getCategory() != null) {
             CATEGORY_MAP.computeIfAbsent(q.getCategory().trim().toLowerCase(), k -> new CopyOnWriteArrayList<>()).add(q);
         }
+    }
+
+    public static List<Question> getQuestionsByFilter(String category, String topic, String difficulty, int count) {
+        List<Question> matches = new ArrayList<>();
+        String diff = (difficulty != null) ? difficulty.trim().toLowerCase() : "medium";
+        String top = (topic != null) ? topic.trim().toLowerCase() : null;
+        String cat = (category != null) ? normalizeCategory(category) : null;
+
+        for (Question q : ALL_QUESTIONS) {
+            boolean diffOk = q.getDifficulty() != null && q.getDifficulty().equalsIgnoreCase(diff);
+            boolean topOk = (top == null || top.equals("all") || (q.getTopic() != null && q.getTopic().toLowerCase().contains(top)));
+            boolean catOk = (cat == null || cat.equals("all") || (q.getCategory() != null && normalizeCategory(q.getCategory()).contains(cat)));
+
+            if (diffOk && topOk && catOk) {
+                matches.add(q);
+            }
+        }
+
+        if (matches.size() < count) {
+            for (Question q : ALL_QUESTIONS) {
+                if (!matches.contains(q)) {
+                    boolean catOk = (cat == null || cat.equals("all") || (q.getCategory() != null && normalizeCategory(q.getCategory()).contains(cat)));
+                    if (catOk) matches.add(q);
+                    if (matches.size() >= count) break;
+                }
+            }
+        }
+
+        Collections.shuffle(matches);
+        return new ArrayList<>(matches.subList(0, Math.min(count, matches.size())));
     }
 
     public static int getTotalQuestionCount() {
@@ -521,5 +554,140 @@ public class PlacementQuestionBank {
                 "What will be the output of the following C code?\n\nint arr[] = {10, 20, 30, 40};\nint *ptr = arr;\nprintf(\"%d\", *(ptr + 2));",
                 "10", "20", "30", "40",
                 2, "Pointer arithmetic: 'ptr' points to arr[0] (value 10). *(ptr + 2) accesses the element at index 2, which is arr[2] = 30."));
+
+        // =====================================================================
+        // EXTRA HARD & ADVANCED PLACEMENT QUESTIONS
+        // =====================================================================
+
+        // 1. Extra Hard - Quantitative Aptitude
+        Question q130 = new Question(130, "Quantitative Aptitude", "Permutations and Combinations", "Extra Hard",
+                "In how many ways can 5 software engineers and 4 data scientists sit around a circular table such that no two data scientists sit together?",
+                "2880", "43200", "28800", "14400",
+                0, "Step 1: First arrange 5 software engineers around a circular table in (5 - 1)! = 4! = 24 ways.\n" +
+                "Step 2: There are now 5 distinct gap spaces created between the engineers.\n" +
+                "Step 3: The 4 data scientists must be seated in these 5 gaps: P(5, 4) = 5! / (5 - 4)! = 120 ways.\n" +
+                "Step 4: Total distinct circular arrangements = 24 * 120 = 2,880 ways.");
+        q130.setSection("Quantitative Aptitude");
+        addQuestion(q130);
+
+        Question q131 = new Question(131, "Quantitative Aptitude", "Mixtures and Alligation", "Extra Hard",
+                "A container contains 80 liters of pure milk. From this container, 8 liters of milk was taken out and replaced with water. This process was repeated further two times. How much milk is now contained by the container?",
+                "58.32 liters", "56.40 liters", "60.24 liters", "52.88 liters",
+                0, "Standard replacement formula: Final Quantity = Initial * (1 - y/x)^n.\n" +
+                "Here Initial x = 80 L, Replaced y = 8 L, n = 3 operations.\n" +
+                "Final Milk = 80 * (1 - 8/80)^3 = 80 * (9/10)^3 = 80 * (729 / 1000) = 80 * 0.729 = 58.32 liters.");
+        q131.setSection("Quantitative Aptitude");
+        addQuestion(q131);
+
+        Question q132 = new Question(132, "Quantitative Aptitude", "Time and Work", "Hard",
+                "A and B can do a work in 20 days and 30 days respectively. They started the work together, but A left 5 days before the completion of work. In how many total days was the work completed?",
+                "12 days", "14 days", "15 days", "18 days",
+                2, "Let total days taken = T.\n" +
+                "B worked for all T days, while A worked for (T - 5) days.\n" +
+                "(T - 5)/20 + T/30 = 1 => 3(T - 5) + 2T = 60 => 5T - 15 = 60 => 5T = 75 => T = 15 days.");
+        q132.setSection("Quantitative Aptitude");
+        addQuestion(q132);
+
+        // 2. Extra Hard - Logical Reasoning
+        Question q210 = new Question(210, "Logical Reasoning", "Circular Seating Arrangements", "Extra Hard",
+                "Eight friends A, B, C, D, E, F, G, and H are sitting around a circular table. Four are facing the center while four are facing outward. A sits third to the right of B, who faces outward. C sits third to the left of A. D sits second to the right of C. Neither A nor B is an immediate neighbor of D. If G sits opposite to D facing the center, which of the following must be true?",
+                "F faces outward", "C faces the center", "E sits adjacent to B", "H faces outward",
+                1, "Analyzing the cyclic constraints and alternating orientations: D faces outward at position 4 while C must face the center to place D second to its right. Hence, C faces the center is strictly valid.");
+        q210.setSection("Logical Reasoning");
+        addQuestion(q210);
+
+        Question q211 = new Question(211, "Logical Reasoning", "Syllogisms", "Hard",
+                "Statements:\n1. Only a few algorithms are efficient.\n2. All efficient solutions are scalable.\n3. No scalable design is redundant.\nConclusions:\nI. Some algorithms are not efficient.\nII. Some algorithms are scalable.\nIII. No efficient solution is redundant.",
+                "Only I and III follow", "Only II and III follow", "All I, II and III follow", "Only I follows",
+                2, "Breakdown: 'Only a few algorithms are efficient' strictly implies both (Some are efficient) AND (Some are NOT efficient). Thus Conclusion I follows.\n" +
+                "Since Some algorithms are efficient and All efficient are scalable, Conclusion II follows.\n" +
+                "Since All efficient are scalable and No scalable is redundant, Conclusion III follows.\n" +
+                "All I, II and III follow.");
+        q211.setSection("Logical Reasoning");
+        addQuestion(q211);
+
+        // 3. Verbal Ability - Reading Comprehension
+        Question q310 = new Question(310, "Verbal Ability", "Reading Comprehension", "Hard",
+                "Based on the provided passage, what is the author's primary attitude toward autonomous artificial intelligence systems in safety-critical sectors?",
+                "Unconditional optimism", "Prudent vigilance and structured governance", "Hostile rejection", "Passive indifference",
+                1, "The passage explicitly advocates that while technological autonomy offers speed advantages, mission-critical operations necessitate rigorous formal verification, human-in-the-loop auditability, and structured governance frameworks. Hence, 'Prudent vigilance and structured governance' represents the author's nuanced stance.");
+        q310.setSection("Verbal Ability");
+        q310.setQuestionType("READING_COMPREHENSION");
+        q310.setPassageOrCode("The inexorable migration toward autonomous algorithmic systems in safety-critical sectors—such as civil aviation, surgical robotics, and high-voltage power grid orchestration—demands a fundamental reconsideration of risk mitigation paradigms. While deep neural networks deliver unprecedented pattern recognition capabilities, their inherent opacity and susceptibility to distributional shift present profound architectural challenges. Autonomous systems cannot merely rely upon statistical validation; they mandate rigorous formal verification, deterministic fail-safe rollbacks, and continuous human-in-the-loop oversight. Without robust institutional governance frameworks, the velocity of deployment risks outpacing our capacity to guarantee operational resilience.");
+        addQuestion(q310);
+
+        // 4. Output Prediction - Java
+        Question q410 = new Question(410, "Technical and Coding", "Problem Solving and Output Prediction", "Hard",
+                "What will be the output of the following Java program?",
+                "Parent Static -> Child Static -> Parent Init -> Child Init",
+                "Child Static -> Parent Static -> Child Init -> Parent Init",
+                "Parent Init -> Child Init -> Parent Static -> Child Static",
+                "Compilation Error",
+                0, "In Java class initialization order:\n" +
+                "1. Superclass static blocks execute first.\n" +
+                "2. Subclass static blocks execute.\n" +
+                "3. Upon instantiation: Superclass instance initializers & constructor execute.\n" +
+                "4. Finally, Subclass instance initializers & constructor execute.");
+        q410.setSection("Technical and Coding");
+        q410.setQuestionType("OUTPUT_PREDICTION");
+        q410.setPassageOrCode("class Parent {\n    static { System.out.print(\"Parent Static -> \"); }\n    { System.out.print(\"Parent Init -> \"); }\n}\nclass Child extends Parent {\n    static { System.out.print(\"Child Static -> \"); }\n    { System.out.print(\"Child Init\"); }\n    public static void main(String[] args) {\n        new Child();\n    }\n}");
+        addQuestion(q410);
+
+        // 5. Output Prediction - Python
+        Question q411 = new Question(411, "Technical and Coding", "Python Programming", "Hard",
+                "What is the output of the following Python code snippet?",
+                "[1] [2]", "[1] [1, 2]", "[[1]] [[2]]", "AttributeError",
+                1, "In Python, default parameter values are evaluated ONCE when the function definition is executed, NOT each time the function is called. Because the default list 'target=[]' is mutable, both function calls mutate the exact same list instance in memory, resulting in [1] then [1, 2].");
+        q411.setSection("Technical and Coding");
+        q411.setQuestionType("OUTPUT_PREDICTION");
+        q411.setPassageOrCode("def append_item(val, target=[]):\n    target.append(val)\n    return target\n\nprint(append_item(1), append_item(2))");
+        addQuestion(q411);
+
+        // 6. Output Prediction - C Programming
+        Question q412 = new Question(412, "Technical and Coding", "C Programming", "Extra Hard",
+                "What will be printed when the following C code executes?",
+                "15 15", "16 16", "15 16", "Undefined behavior",
+                0, "In C, pointer arithmetic: &arr is a pointer to the entire array of 5 ints (type int (*)[5]). (&arr + 1) increments the address by sizeof(arr) = 5 * sizeof(int), pointing immediately past the array boundary. Casting to (int *) and subtracting 1 points to arr[4] (value 5). *(ptr1 - 1) = 5.\n" +
+                "arr is an array decaying to pointer to first element. (arr + 1) points to arr[1] (value 2). *ptr2 = 2.\n" +
+                "Therefore *(ptr1 - 1) * *ptr2 + 5 = 5 * 2 + 5 = 15.");
+        q412.setSection("Technical and Coding");
+        q412.setQuestionType("OUTPUT_PREDICTION");
+        q412.setPassageOrCode("#include <stdio.h>\nint main() {\n    int arr[5] = {1, 2, 3, 4, 5};\n    int *ptr1 = (int*)(&arr + 1);\n    int *ptr2 = (int*)(arr + 1);\n    printf(\"%d %d\", *(ptr1 - 1) * *ptr2 + 5, 15);\n    return 0;\n}");
+        addQuestion(q412);
+
+        // 7. Core CS - DBMS and SQL
+        Question q413 = new Question(413, "Technical and Coding", "DBMS and SQL", "Extra Hard",
+                "In relational database concurrency control, which Isolation Level completely prevents Dirty Reads, Non-repeatable Reads, AND Phantom Reads?",
+                "Read Committed", "Repeatable Read", "Serializable", "Snapshot Isolation",
+                2, "SQL-92 Standard defines 4 transaction isolation levels. Serializable is the highest level and guarantees that concurrent transaction execution yields the exact same state as some serial execution order, completely eliminating Dirty Reads, Non-repeatable Reads, and Phantom Reads.");
+        q413.setSection("Technical and Coding");
+        addQuestion(q413);
+
+        // 8. Core CS - Data Structures and Algorithms
+        Question q414 = new Question(414, "Technical and Coding", "Data Structures and Algorithms", "Extra Hard",
+                "What is the amortized time complexity of the push and pop operations in a Min-Heap implemented using a Fibonacci Heap?",
+                "O(1) push, O(log n) extract-min", "O(log n) push, O(1) extract-min", "O(log n) push, O(log n) extract-min", "O(1) push, O(1) extract-min",
+                0, "Fibonacci Heaps achieve O(1) amortized time for insertion (push), find-min, union, and decrease-key operations. Only delete and extract-min require O(log n) amortized time.");
+        q414.setSection("Technical and Coding");
+        addQuestion(q414);
+
+        // 9. Core CS - Operating Systems
+        Question q415 = new Question(415, "Technical and Coding", "Operating Systems", "Hard",
+                "In virtual memory management, Belady's Anomaly refers to the phenomenon where:",
+                "Increasing the number of allocated page frames increases the number of page faults",
+                "Page faults decrease exponentially with FIFO page replacement",
+                "LRU replacement performs slower than Random replacement",
+                "Thrashing occurs due to insufficient disk swap space",
+                0, "Belady's Anomaly is a counter-intuitive observation in FIFO page replacement algorithm where allocating more physical page frames to a process paradoxically results in an increased number of page faults for certain reference strings.");
+        q415.setSection("Technical and Coding");
+        addQuestion(q415);
+
+        // 10. Core CS - Computer Networks
+        Question q416 = new Question(416, "Technical and Coding", "Computer Networks", "Hard",
+                "How many usable host IP addresses are available in a subnetwork with the CIDR prefix /27?",
+                "28", "30", "32", "62",
+                1, "An IPv4 address has 32 bits. A /27 network leaves 32 - 27 = 5 bits for host addressing. Total addresses = 2^5 = 32. Subtracting 2 reserved addresses (1 for network address and 1 for broadcast address) leaves 32 - 2 = 30 usable host IP addresses.");
+        q416.setSection("Technical and Coding");
+        addQuestion(q416);
     }
 }

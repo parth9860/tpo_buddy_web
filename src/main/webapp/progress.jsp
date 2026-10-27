@@ -101,6 +101,7 @@
                             <tr>
                                 <th>Category</th>
                                 <th>Topic</th>
+                                <th>Difficulty</th>
                                 <th>Score</th>
                                 <th>Correct Answers</th>
                                 <th>Result Status</th>
@@ -109,10 +110,13 @@
                         </thead>
                         <tbody>
                             <% if (testHistory != null && !testHistory.isEmpty()) {
-                                for (TestAttempt t : testHistory) { %>
+                                for (TestAttempt t : testHistory) { 
+                                    String diff = t.getDifficulty() != null && !t.getDifficulty().isEmpty() ? t.getDifficulty() : "Medium";
+                                %>
                                 <tr>
                                     <td style="font-weight: 600; color: var(--text-primary);"><%= t.getCategory() %></td>
                                     <td><%= t.getTopic() %></td>
+                                    <td><span class="badge badge-outline" style="font-size: 0.75rem;"><%= diff %></span></td>
                                     <td style="font-weight: 700; color: <%= t.isPassed() ? "var(--accent-emerald)" : "var(--accent-amber)" %>;"><%= t.getScore() %>%</td>
                                     <td><%= t.getCorrectAnswers() %> / <%= t.getTotalQuestions() %></td>
                                     <td>
@@ -125,7 +129,7 @@
                             <%  }
                             } else { %>
                                 <tr>
-                                    <td colspan="6" style="text-align: center; padding: 3rem; color: var(--text-muted);">
+                                    <td colspan="7" style="text-align: center; padding: 3rem; color: var(--text-muted);">
                                         No assessment records found. Update your profile and skills to boost your placement readiness score.
                                         <div style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: center;">
                                             <a href="${pageContext.request.contextPath}/tests" class="btn btn-primary btn-sm">Start Placement Test</a>

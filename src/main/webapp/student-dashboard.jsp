@@ -177,10 +177,10 @@
                     <div style="padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
                         <a href="${pageContext.request.contextPath}/tests" style="text-decoration: none; background: #eef2ff; border: 1.5px solid #6366f1; border-radius: var(--radius-sm); padding: 1.1rem; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s ease;">
                             <div>
-                                <div style="font-weight: 700; color: #4338ca; font-size: 0.95rem;">📝 Placement Preparation Test Series</div>
-                                <div style="font-size: 0.85rem; color: #4b5563;">Topic-wise practice (Quant, Logical, Verbal, Tech), sectional tests & company mocks</div>
+                                <div style="font-weight: 700; color: #4338ca; font-size: 0.95rem;">🎯 AI Test Series (College & Platform)</div>
+                                <div style="font-size: 0.85rem; color: #4b5563;">SNJB Placement Prep, 12 Core CS Subject Tests & 13 Platform Tracks with AI Generation</div>
                             </div>
-                            <span class="badge badge-primary" style="background: #4f46e5; color: white;">Start Test →</span>
+                            <span class="badge badge-primary" style="background: #4f46e5; color: white;">Open Test Series →</span>
                         </a>
 
                         <a href="${pageContext.request.contextPath}/resume" style="text-decoration: none; background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 1.1rem; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s ease;">
