@@ -273,35 +273,40 @@ async function startExamInFullscreen() {
             selectedTopics: selectedTopics ? [selectedTopics] : []
         };
 
-        const res = await fetch(`${window.CONTEXT_PATH}/api/test-attempts`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        let data = null;
+        try {
+            const res = await fetch(`${window.CONTEXT_PATH}/api/test-attempts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const cType = res.headers.get('content-type') || '';
+            if (res.ok && cType.includes('application/json')) {
+                data = await res.json();
+            }
+        } catch (fetchErr) {
+            data = null;
+        }
 
-        const data = await res.json();
-        if (data.success && data.attemptId) {
+        if (data && data.success && data.attemptId) {
             activeAttemptId = data.attemptId;
 
             if (data.status === 'READY') {
                 await fetchAndLaunchQuestions(activeAttemptId);
             } else {
-                // Poll attempt generation status
                 pollGenerationStatus(activeAttemptId);
             }
         } else {
-            console.warn('API /api/test-attempts returned non-success, attempting fallback to /api/tests/start...', data);
+            console.warn('API /api/test-attempts returned non-success or non-JSON, attempting fallback...');
             await fallbackStartExam();
         }
     } catch (err) {
-        console.warn('Error connecting to /api/test-attempts, attempting fallback to /api/tests/start...', err);
+        console.warn('Error connecting to /api/test-attempts, attempting fallback...', err);
         try {
             await fallbackStartExam();
         } catch (fallbackErr) {
-            hideAiLoadingModal();
-            document.body.classList.remove('in-exam-mode');
-            document.documentElement.classList.remove('in-exam-mode');
-            alert('Failed to initialize test: ' + (fallbackErr.message || 'Network error connecting to test engine.'));
+            console.warn('Backend test APIs unavailable. Activating client-side Placement Question Engine...');
+            await startClientSideExam();
         }
     }
 }
@@ -315,14 +320,22 @@ async function fallbackStartExam() {
         count: 30
     };
 
-    const res = await fetch(`${window.CONTEXT_PATH}/api/tests/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(fbPayload)
-    });
+    let data = null;
+    try {
+        const res = await fetch(`${window.CONTEXT_PATH}/api/tests/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fbPayload)
+        });
+        const cType = res.headers.get('content-type') || '';
+        if (res.ok && cType.includes('application/json')) {
+            data = await res.json();
+        }
+    } catch (err) {
+        data = null;
+    }
 
-    const data = await res.json();
-    if (data.success && data.questions && data.questions.length > 0) {
+    if (data && data.success && data.questions && data.questions.length > 0) {
         hideAiLoadingModal();
         activeAttemptId = data.attemptId;
         currentQuestions = data.questions;
@@ -341,11 +354,78 @@ async function fallbackStartExam() {
         renderQuestionPalette();
         renderCurrentQuestion();
     } else {
+        // Automatically switch to client-side question engine for static hosting (e.g. Netlify)
+        console.info('Switching to client-side Question Engine...');
+        await startClientSideExam();
+    }
+}
+
+async function startClientSideExam() {
+    const statusText = document.getElementById('aiLoadingStatusText');
+    const bar = document.getElementById('aiProgressBar');
+
+    if (statusText) statusText.textContent = 'Step 1/4: Calibrating 30 balanced questions for assessment...';
+    if (bar) bar.style.width = '25%';
+
+    await new Promise(r => setTimeout(r, 200));
+    if (statusText) statusText.textContent = 'Step 2/4: Validating structured questions, options, and difficulty calibration...';
+    if (bar) bar.style.width = '55%';
+
+    await new Promise(r => setTimeout(r, 250));
+    if (statusText) statusText.textContent = 'Step 3/4: Setting up proctoring integrity watchdog & timer...';
+    if (bar) bar.style.width = '80%';
+
+    await new Promise(r => setTimeout(r, 250));
+    if (statusText) statusText.textContent = 'Step 4/4: Test ready! Launching fullscreen exam view...';
+    if (bar) bar.style.width = '100%';
+
+    await new Promise(r => setTimeout(r, 200));
+
+    let questions = [];
+    if (typeof PlacementQuestionBank !== 'undefined' && PlacementQuestionBank.getQuestionsForAttempt) {
+        questions = PlacementQuestionBank.getQuestionsForAttempt({
+            seriesId: selectedSeriesId,
+            category: selectedCategory || selectedSubject || 'Quantitative Aptitude',
+            topic: selectedTopics || selectedSubject || 'General Assessment',
+            difficulty: selectedDifficulty || 'Medium',
+            count: 30
+        });
+    }
+
+    if (!questions || questions.length === 0) {
         hideAiLoadingModal();
         document.body.classList.remove('in-exam-mode');
         document.documentElement.classList.remove('in-exam-mode');
-        alert('Failed to initialize test questions: ' + (data.error || data.message || 'Unknown error'));
+        alert('Could not calibrate examination questions. Please refresh the page and try again.');
+        return;
     }
+
+    hideAiLoadingModal();
+    activeAttemptId = 'att_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6);
+    currentQuestions = questions;
+    currentIndex = 0;
+    userAnswers = {};
+    markedForReview = new Set();
+    remainingSeconds = 1800; // 30 minutes
+    violationCount = 0;
+
+    // Fullscreen entry
+    try {
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen();
+        }
+    } catch (e) {
+        console.warn('Fullscreen request bypassed:', e);
+    }
+
+    document.body.classList.add('in-exam-mode');
+    document.documentElement.classList.add('in-exam-mode');
+
+    switchToExamRunnerView(selectedCategory, selectedTitle, selectedDifficulty);
+    startTimerCountdown();
+    attachSecurityWatchdogs();
+    renderQuestionPalette();
+    renderCurrentQuestion();
 }
 
 function showAiLoadingModal() {
@@ -1446,6 +1526,33 @@ async function submitAssessmentTest(reason = 'manual') {
         try {
             await fallbackSubmitExam(submittedAttemptId, reason);
         } catch (fbErr) {
+            if (typeof PlacementQuestionBank !== 'undefined' && PlacementQuestionBank.gradeAttempt) {
+                console.info('Evaluating attempt via client-side placement grading engine...');
+                const duration = Math.max(1, 1800 - remainingSeconds);
+                const result = PlacementQuestionBank.gradeAttempt(
+                    {
+                        attemptId: submittedAttemptId,
+                        title: selectedTitle || 'SNJB Quantitative Aptitude Sectional',
+                        category: selectedCategory || 'Quantitative Aptitude',
+                        difficulty: selectedDifficulty || 'Medium',
+                        seriesId: selectedSeriesId || 'college_snjb_quant'
+                    },
+                    currentQuestions,
+                    userAnswers,
+                    duration,
+                    violationCount
+                );
+
+                submissionState = 'SUBMITTED';
+                isSubmitting = false;
+                updateSubmissionStatusMessage('Submission confirmed. Opening your result...');
+                activeAttemptId = null;
+                setTimeout(() => {
+                    window.location.href = `${window.CONTEXT_PATH}/test-result?attemptId=${encodeURIComponent(submittedAttemptId)}`;
+                }, 300);
+                return;
+            }
+
             submissionState = 'SUBMISSION_FAILED';
             isSubmitting = false;
             window._activeSubmitRequest = false;

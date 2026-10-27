@@ -179,9 +179,9 @@
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1.5rem;">
                     <div>
                         <div style="display: flex; align-items: center; gap: 0.65rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
-                            <span class="badge badge-primary"><%= category %></span>
-                            <span class="badge badge-outline"><%= difficulty %></span>
-                            <span class="badge <%= passed ? "badge-success" : "badge-warning" %>" style="font-weight: 700;">
+                            <span id="heroCategoryBadge" class="badge badge-primary"><%= category %></span>
+                            <span id="heroDifficultyBadge" class="badge badge-outline"><%= difficulty %></span>
+                            <span id="heroPassedBadge" class="badge <%= passed ? "badge-success" : "badge-warning" %>" style="font-weight: 700;">
                                 <%= passed ? "✓ PASSED (≥ 60%)" : "⚠️ NEEDS PRACTICE (< 60%)" %>
                             </span>
                             <% if ("auto_submitted_security".equalsIgnoreCase(attemptStatus) || "terminated".equalsIgnoreCase(attemptStatus)) { %>
@@ -190,10 +190,10 @@
                                 <span class="badge badge-warning">Time Expired</span>
                             <% } %>
                         </div>
-                        <h1 style="font-size: 1.85rem; font-weight: 800; margin: 0 0 0.5rem 0; color: var(--text-primary);">
+                        <h1 id="heroTestTitle" style="font-size: 1.85rem; font-weight: 800; margin: 0 0 0.5rem 0; color: var(--text-primary);">
                             <%= title %>
                         </h1>
-                        <p style="color: var(--text-muted); font-size: 0.875rem; margin: 0;">
+                        <p id="heroTestMeta" style="color: var(--text-muted); font-size: 0.875rem; margin: 0;">
                             Submitted on <strong><%= formattedDate %></strong> • Candidate: <strong><%= user != null ? user.getName() : "Student" %></strong> • Attempt ID: <code style="font-size: 0.75rem; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;"><%= attempt != null ? attempt.getId() : "" %></code>
                         </p>
                     </div>
@@ -211,10 +211,10 @@
                 <!-- Final Score -->
                 <div class="result-stat-card">
                     <div class="result-stat-label">Final Score</div>
-                    <div class="result-stat-val" style="color: <%= passed ? "var(--accent-emerald)" : "var(--accent-amber)" %>;">
+                    <div id="statFinalScore" class="result-stat-val" style="color: <%= passed ? "var(--accent-emerald)" : "var(--accent-amber)" %>;">
                         <%= score %>%
                     </div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+                    <div id="statRawScore" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
                         Raw Score: <strong><%= (correctCount * 2) %></strong> / <%= (totalQuestions * 2) %> Marks
                     </div>
                 </div>
@@ -222,10 +222,10 @@
                 <!-- Accuracy -->
                 <div class="result-stat-card">
                     <div class="result-stat-label">Accuracy Rate</div>
-                    <div class="result-stat-val" style="color: #2563eb;">
+                    <div id="statAccuracyRate" class="result-stat-val" style="color: #2563eb;">
                         <%= Math.round(accuracy) %>%
                     </div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+                    <div id="statAccuracySub" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
                         <%= correctCount %> correct of <%= attemptedCount %> attempted
                     </div>
                 </div>
@@ -233,10 +233,10 @@
                 <!-- Questions Overview -->
                 <div class="result-stat-card">
                     <div class="result-stat-label">Correct / Total</div>
-                    <div class="result-stat-val" style="color: var(--text-primary);">
+                    <div id="statCorrectTotal" class="result-stat-val" style="color: var(--text-primary);">
                         <%= correctCount %> <span style="font-size: 1.1rem; color: var(--text-muted); font-weight: 600;">/ <%= totalQuestions %></span>
                     </div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+                    <div id="statQuestionsSub" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
                         <span style="color: #10b981; font-weight: 600;"><%= correctCount %> Correct</span> • 
                         <span style="color: #ef4444; font-weight: 600;"><%= incorrectCount %> Wrong</span> • 
                         <span style="color: #64748b; font-weight: 600;"><%= unansweredCount %> Skipped</span>
@@ -246,7 +246,7 @@
                 <!-- Time Taken -->
                 <div class="result-stat-card">
                     <div class="result-stat-label">Time Taken</div>
-                    <div class="result-stat-val" style="color: var(--text-primary);">
+                    <div id="statTimeTaken" class="result-stat-val" style="color: var(--text-primary);">
                         <%= timeTakenStr %>
                     </div>
                     <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
@@ -257,10 +257,10 @@
                 <!-- Integrity Proctoring -->
                 <div class="result-stat-card">
                     <div class="result-stat-label">Proctoring Status</div>
-                    <div class="result-stat-val" style="font-size: 1.35rem; color: <%= "HIGH".equalsIgnoreCase(riskLevel) ? "#dc2626" : ("MODERATE".equalsIgnoreCase(riskLevel) ? "#d97706" : "#16a34a") %>;">
+                    <div id="statProctorStatus" class="result-stat-val" style="font-size: 1.35rem; color: <%= "HIGH".equalsIgnoreCase(riskLevel) ? "#dc2626" : ("MODERATE".equalsIgnoreCase(riskLevel) ? "#d97706" : "#16a34a") %>;">
                         <%= riskLevel %> RISK
                     </div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+                    <div id="statProctorSub" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
                         Violations Recorded: <strong><%= violations %> / 3</strong>
                     </div>
                 </div>

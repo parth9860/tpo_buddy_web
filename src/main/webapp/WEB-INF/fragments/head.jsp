@@ -49,4 +49,5 @@
 </script>
 <script src="${pageContext.request.contextPath}/assets/js/firebase-config.js"></script>
 <script src="${pageContext.request.contextPath}/assets/js/auth.js"></script>
+<script src="${pageContext.request.contextPath}/assets/js/question-bank.js"></script>
 <script src="${pageContext.request.contextPath}/assets/js/ai-orb.js"></script>

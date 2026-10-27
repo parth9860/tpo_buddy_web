@@ -19,6 +19,7 @@
 <head>
     <title>AI Test Series — College & Platform Preparation — TPO Buddy</title>
     <jsp:include page="/WEB-INF/fragments/head.jsp" />
+    <script src="${pageContext.request.contextPath}/assets/js/question-bank.js"></script>
     <script src="${pageContext.request.contextPath}/assets/js/tests.js?v=<%= System.currentTimeMillis() %>"></script>
     <style>
         /* ------------------------------------------------------------------ */

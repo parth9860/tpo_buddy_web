@@ -23,10 +23,99 @@ function initReviewsData() {
         rawReviewsData = [];
     }
 
+    // Static hosting fallback: Hydrate from localStorage
+    if (!rawReviewsData || rawReviewsData.length === 0) {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const attemptId = urlParams.get('attemptId');
+            let stored = null;
+            if (attemptId) {
+                stored = localStorage.getItem('testAttempt_' + attemptId);
+            }
+            if (!stored) {
+                stored = localStorage.getItem('latestTestAttempt');
+            }
+            if (stored) {
+                const attempt = JSON.parse(stored);
+                if (attempt && attempt.reviews && attempt.reviews.length > 0) {
+                    rawReviewsData = attempt.reviews;
+                    hydrateResultPageStats(attempt);
+                }
+            }
+        } catch (storageErr) {
+            console.warn('Error reading attempt from localStorage:', storageErr);
+        }
+    }
+
     const allCountEl = document.getElementById('countFilterAll');
     if (allCountEl) {
         allCountEl.textContent = rawReviewsData.length;
     }
+}
+
+function hydrateResultPageStats(attempt) {
+    if (!attempt) return;
+
+    const setTxt = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    };
+
+    setTxt('statFinalScore', (attempt.score || 0) + '%');
+    const finalScoreEl = document.getElementById('statFinalScore');
+    if (finalScoreEl) {
+        finalScoreEl.style.color = attempt.passed ? 'var(--accent-emerald)' : 'var(--accent-amber)';
+    }
+
+    const qTotal = attempt.totalQuestions || 30;
+    const cCount = attempt.correctCount || 0;
+    const iCount = attempt.incorrectCount || 0;
+    const uCount = attempt.unansweredCount || 0;
+
+    setTxt('statRawScore', `Raw Score: ${cCount * 2} / ${qTotal * 2} Marks`);
+    setTxt('statAccuracyRate', Math.round(attempt.accuracy || 0) + '%');
+    setTxt('statAccuracySub', `${cCount} correct of ${cCount + iCount} attempted`);
+
+    const corrTotalEl = document.getElementById('statCorrectTotal');
+    if (corrTotalEl) {
+        corrTotalEl.innerHTML = `${cCount} <span style="font-size: 1.1rem; color: var(--text-muted); font-weight: 600;">/ ${qTotal}</span>`;
+    }
+
+    const qSubEl = document.getElementById('statQuestionsSub');
+    if (qSubEl) {
+        qSubEl.innerHTML = `
+            <span style="color: #10b981; font-weight: 600;">${cCount} Correct</span> • 
+            <span style="color: #ef4444; font-weight: 600;">${iCount} Wrong</span> • 
+            <span style="color: #64748b; font-weight: 600;">${uCount} Skipped</span>
+        `;
+    }
+
+    const mins = Math.floor((attempt.timeTakenSeconds || 0) / 60);
+    const secs = (attempt.timeTakenSeconds || 0) % 60;
+    setTxt('statTimeTaken', `${mins}m ${secs}s`);
+
+    const risk = attempt.riskLevel || 'LOW';
+    setTxt('statProctorStatus', risk + ' RISK');
+    const proctorValEl = document.getElementById('statProctorStatus');
+    if (proctorValEl) {
+        proctorValEl.style.color = risk === 'HIGH' ? '#dc2626' : (risk === 'MODERATE' ? '#d97706' : '#16a34a');
+    }
+    setTxt('statProctorSub', `Violations Recorded: ${attempt.violationCount || 0} / 3`);
+
+    setTxt('heroTestTitle', attempt.testTitle || 'Placement Assessment');
+    setTxt('heroCategoryBadge', attempt.category || 'General Assessment');
+    setTxt('heroDifficultyBadge', attempt.difficulty || 'Medium');
+
+    const passedBadge = document.getElementById('heroPassedBadge');
+    if (passedBadge) {
+        passedBadge.textContent = attempt.passed ? '✓ PASSED (≥ 60%)' : '⚠️ NEEDS PRACTICE (< 60%)';
+        passedBadge.className = 'badge ' + (attempt.passed ? 'badge-success' : 'badge-warning');
+    }
+
+    setTxt('countFilterAll', rawReviewsData.length || qTotal);
+    setTxt('countFilterCorrect', cCount);
+    setTxt('countFilterIncorrect', iCount);
+    setTxt('countFilterUnanswered', uCount);
 }
 
 function scrollToReviewSection() {
