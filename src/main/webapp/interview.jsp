@@ -223,11 +223,13 @@
             const videoRef = useRef(null);
             const timerRef = useRef(null);
 
+            const getCtx = () => (typeof window.CONTEXT_PATH === 'string' ? window.CONTEXT_PATH : '');
+
             // Active Session Check on Mount to gracefully recover on page refresh
             useEffect(() => {
                 const checkActiveSession = async () => {
                     try {
-                        const res = await fetch(window.CONTEXT_PATH + '/api/interview/active-session');
+                        const res = await fetch(getCtx() + '/api/interview/active-session');
                         if (res.ok) {
                             const data = await res.json();
                             if (data && data.success && data.hasActiveSession) {
@@ -334,7 +336,7 @@
                 if (isStarting) return;
                 setIsStarting(true);
                 try {
-                    const res = await fetch(window.CONTEXT_PATH + '/api/interview/start', {
+                    const res = await fetch(getCtx() + '/api/interview/start', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -371,7 +373,7 @@
                 if (!sessionId || isEvaluating) return;
                 setIsEvaluating(true);
                 try {
-                    const res = await fetch(window.CONTEXT_PATH + '/api/interview/answer', {
+                    const res = await fetch(getCtx() + '/api/interview/answer', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -426,7 +428,7 @@
                 if (isFinishing || !sessionId) return;
                 setIsFinishing(true);
                 try {
-                    const res = await fetch(window.CONTEXT_PATH + '/api/interview/finish', {
+                    const res = await fetch(getCtx() + '/api/interview/finish', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ sessionId: sessionId })
@@ -458,7 +460,7 @@
                         </div>
                         <h2 style={{ fontSize: '1.75rem', marginBottom: '0.75rem' }}>AI Placement Mock Interview Studio</h2>
                         <p style={{ color: 'var(--text-secondary)', maxWidth: '580px', margin: '0 auto 2rem', fontSize: '0.95rem' }}>
-                            Simulate authentic company technical, system design, and HR rounds powered by Google Gemini AI with real-time feedback, webcam proctoring, and comprehensive placement scoring.
+                            Simulate authentic company technical, system design, and HR rounds powered by Google Gemini AI with real-time feedback, live camera practice mirror, and comprehensive placement scoring.
                         </p>
 
                         {/* Step 1: Select Job Role */}
