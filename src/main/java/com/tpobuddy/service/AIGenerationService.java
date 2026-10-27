@@ -36,13 +36,13 @@ public class AIGenerationService {
     private final AtomicInteger generatedIdCounter = new AtomicInteger(900000);
 
     @Value("${gemini.api.key:}")
-    private String geminiApiKey;
+    private String geminiApiKey = "";
 
-    @Value("${gemini.model:gemini-flash-lite-latest}")
-    private String geminiModel;
+    @Value("${gemini.model:gemini-2.5-flash}")
+    private String geminiModel = "gemini-2.5-flash";
 
     @Value("${gemini.api.url:https://generativelanguage.googleapis.com/v1beta/models/}")
-    private String geminiApiUrl;
+    private String geminiApiUrl = "https://generativelanguage.googleapis.com/v1beta/models/";
 
     public AIGenerationService(QuestionValidationService validationService) {
         this.validationService = validationService;
@@ -75,8 +75,11 @@ public class AIGenerationService {
                 List<Question> batch2 = generateBatchWithGemini(series, effDifficulty, customTopics, batch2Size, 2, apiKey);
                 if (batch2 != null) candidatePool.addAll(batch2);
 
-                // Run strict validation and deduplication
-                candidatePool = validationService.filterValidPool(candidatePool);
+                // Run strict validation and deduplication with topic enforcement
+                List<String> allowedTopicsForValidation = (customTopics != null && !customTopics.isEmpty())
+                        ? customTopics
+                        : (series != null ? series.getSyllabusTopics() : null);
+                candidatePool = new ArrayList<>(validationService.filterValidPool(candidatePool, allowedTopicsForValidation));
                 System.out.println("✨ AI Question Generator produced " + candidatePool.size() + " validated candidates.");
             } catch (Exception e) {
                 System.err.println("Notice: AI generation encountered an issue (" + e.getClass().getSimpleName() + "). Engaging verified repository fallback.");
@@ -84,7 +87,7 @@ public class AIGenerationService {
         }
 
         // If pool is under targetPoolSize (e.g. API unconfigured, rate-limited, or partial failure),
-        // seamlessly top up using verified placement repository questions
+        // seamlessly top up using verified placement repository questions strictly filtered by topic
         if (candidatePool.size() < targetPoolSize) {
             int needed = targetPoolSize - candidatePool.size();
             List<Question> fallbackQuestions = fetchFallbackQuestions(series, effDifficulty, customTopics, needed, candidatePool);
@@ -122,7 +125,7 @@ public class AIGenerationService {
             return Collections.emptyList();
         }
 
-        return parseGeminiResponse(rawResponse, series, difficulty);
+        return parseGeminiResponse(rawResponse, series, difficulty, topics);
     }
 
     private String buildGenerationPrompt(TestSeries series, String difficulty, List<String> topics, int count, int batchNum) {
@@ -185,7 +188,7 @@ public class AIGenerationService {
         return sb.toString();
     }
 
-    private List<Question> parseGeminiResponse(String responseJson, TestSeries series, String difficulty) {
+    private List<Question> parseGeminiResponse(String responseJson, TestSeries series, String difficulty, List<String> allowedTopics) {
         List<Question> list = new ArrayList<>();
         try {
             JsonObject root = JsonParser.parseString(responseJson).getAsJsonObject();
@@ -216,9 +219,24 @@ public class AIGenerationService {
                         Question q = new Question();
                         q.setId(generatedIdCounter.incrementAndGet());
                         q.setQuestion(getString(obj, "question", ""));
-                        q.setCategory(series != null ? series.getName() : "Placement Series");
-                        q.setSection(getString(obj, "section", (series != null ? series.getSubject() : "General")));
-                        q.setTopic(getString(obj, "topic", "General Assessment"));
+                        q.setCategory(series != null ? series.getCategory() : "COLLEGE");
+                        q.setSection(getString(obj, "section", (series != null ? series.getSubject() : "Quantitative Aptitude")));
+
+                        // Resolve topic to one of the configured topics if applicable
+                        String parsedTopic = getString(obj, "topic", "");
+                        if (allowedTopics != null && !allowedTopics.isEmpty()) {
+                            String matched = null;
+                            for (String at : allowedTopics) {
+                                if (at.equalsIgnoreCase(parsedTopic) || at.toLowerCase().contains(parsedTopic.toLowerCase()) || parsedTopic.toLowerCase().contains(at.toLowerCase())) {
+                                    matched = at;
+                                    break;
+                                }
+                            }
+                            q.setTopic(matched != null ? matched : (allowedTopics.size() == 1 ? allowedTopics.get(0) : (parsedTopic.isEmpty() ? allowedTopics.get(0) : parsedTopic)));
+                        } else {
+                            q.setTopic(!parsedTopic.isEmpty() ? parsedTopic : (series != null ? series.getSubject() : "General Assessment"));
+                        }
+
                         q.setDifficulty(getString(obj, "difficulty", difficulty));
                         q.setQuestionType(getString(obj, "questionType", "MCQ"));
                         q.setPassageOrCode(getString(obj, "passageOrCode", ""));
@@ -226,7 +244,7 @@ public class AIGenerationService {
                         q.setOptionB(getString(obj, "optionB", ""));
                         q.setOptionC(getString(obj, "optionC", ""));
                         q.setOptionD(getString(obj, "optionD", ""));
-                        q.setCorrectOption(getInt(obj, "correctOption", 0));
+                        q.setCorrectOption(parseCorrectOption(obj));
                         q.setExplanation(getString(obj, "explanation", ""));
                         q.setMarks(2);
                         list.add(q);
@@ -239,6 +257,25 @@ public class AIGenerationService {
         return list;
     }
 
+    private int parseCorrectOption(JsonObject obj) {
+        if (!obj.has("correctOption") || obj.get("correctOption").isJsonNull()) return 0;
+        try {
+            JsonElement el = obj.get("correctOption");
+            if (el.isJsonPrimitive()) {
+                String val = el.getAsString().trim().toUpperCase();
+                if (val.startsWith("A") || val.equals("0")) return 0;
+                if (val.startsWith("B") || val.equals("1")) return 1;
+                if (val.startsWith("C") || val.equals("2")) return 2;
+                if (val.startsWith("D") || val.equals("3")) return 3;
+                if (val.contains("OPTION A")) return 0;
+                if (val.contains("OPTION B")) return 1;
+                if (val.contains("OPTION C")) return 2;
+                if (val.contains("OPTION D")) return 3;
+            }
+        } catch (Exception ignored) {}
+        return 0;
+    }
+
     private List<Question> fetchFallbackQuestions(TestSeries series, String difficulty, List<String> customTopics,
                                                   int countNeeded, List<Question> existingPool) {
         Set<String> existingNormalizedQuestions = new HashSet<>();
@@ -248,30 +285,35 @@ public class AIGenerationService {
             }
         }
 
-        List<Question> bank = PlacementQuestionBank.getAllQuestions();
-        Collections.shuffle(bank);
+        // Determine effective allowed topics for strict isolation
+        List<String> effectiveTopics = new ArrayList<>();
+        if (customTopics != null && !customTopics.isEmpty()) {
+            effectiveTopics.addAll(customTopics);
+        } else if (series != null && series.getSyllabusTopics() != null && !series.getSyllabusTopics().isEmpty()) {
+            effectiveTopics.addAll(series.getSyllabusTopics());
+        }
 
         List<Question> matching = new ArrayList<>();
-        // Priority 1: match difficulty and subject
-        for (Question q : bank) {
-            if (matching.size() >= countNeeded) break;
-            if (!existingNormalizedQuestions.contains(q.getQuestion().trim().toLowerCase())) {
-                boolean diffMatch = q.getDifficulty() != null && q.getDifficulty().equalsIgnoreCase(difficulty);
-                if (diffMatch) {
+
+        if (!effectiveTopics.isEmpty()) {
+            // STRICT TOPIC FILTERING: Only questions matching effectiveTopics are permitted!
+            List<Question> strictlyMatched = PlacementQuestionBank.getQuestionsForStrictTopics(effectiveTopics, difficulty, countNeeded * 2);
+            for (Question q : strictlyMatched) {
+                if (matching.size() >= countNeeded) break;
+                if (!existingNormalizedQuestions.contains(q.getQuestion().trim().toLowerCase())) {
                     Question clone = cloneQuestion(q);
                     matching.add(clone);
                     existingNormalizedQuestions.add(q.getQuestion().trim().toLowerCase());
                 }
             }
-        }
-
-        // Priority 2: fill remaining regardless of difficulty tag to guarantee candidate pool
-        if (matching.size() < countNeeded) {
-            for (Question q : bank) {
+        } else {
+            // General fallback: match by subject/category
+            String category = (series != null) ? series.getCategory() : "Quantitative Aptitude";
+            List<Question> catQuestions = PlacementQuestionBank.getQuestionsForCategory(category, countNeeded * 2);
+            for (Question q : catQuestions) {
                 if (matching.size() >= countNeeded) break;
                 if (!existingNormalizedQuestions.contains(q.getQuestion().trim().toLowerCase())) {
                     Question clone = cloneQuestion(q);
-                    clone.setDifficulty(difficulty);
                     matching.add(clone);
                     existingNormalizedQuestions.add(q.getQuestion().trim().toLowerCase());
                 }
@@ -332,14 +374,33 @@ public class AIGenerationService {
     }
 
     private String getEffectiveApiKey() {
-        if (geminiApiKey != null && !geminiApiKey.trim().isEmpty() && !geminiApiKey.contains("YOUR_")) {
+        if (geminiApiKey != null && !geminiApiKey.trim().isEmpty() && !geminiApiKey.startsWith("${") && !geminiApiKey.contains("YOUR_")) {
             return geminiApiKey.trim();
         }
         String envKey = System.getenv("GEMINI_API_KEY");
-        if (envKey != null && !envKey.trim().isEmpty()) {
+        if (envKey != null && !envKey.trim().isEmpty() && !envKey.startsWith("${") && !envKey.contains("YOUR_")) {
             return envKey.trim();
         }
-        return Config.get("gemini.api.key", "");
+        String configKey = Config.get("gemini.api.key", "");
+        if (configKey != null && !configKey.trim().isEmpty() && !configKey.startsWith("${") && !configKey.contains("YOUR_")) {
+            return configKey.trim();
+        }
+        // Direct read from .env if running from IDE / standalone
+        try {
+            java.io.File dotEnv = new java.io.File(".env");
+            if (dotEnv.exists()) {
+                try (java.util.Scanner sc = new java.util.Scanner(dotEnv)) {
+                    while (sc.hasNextLine()) {
+                        String line = sc.nextLine().trim();
+                        if (line.startsWith("GEMINI_API_KEY=") && !line.startsWith("#")) {
+                            String k = line.substring("GEMINI_API_KEY=".length()).trim();
+                            if (!k.isEmpty()) return k;
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return "";
     }
 
     private String getString(JsonObject obj, String key, String def) {

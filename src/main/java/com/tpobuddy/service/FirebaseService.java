@@ -40,6 +40,9 @@ public class FirebaseService {
     private final HttpClient httpClient;
 
     public FirebaseService() {
+        this.databaseUrl = Config.getFirebaseDatabaseUrl();
+        this.apiKey = Config.getFirebaseApiKey();
+        this.projectId = Config.getFirebaseProjectId();
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_2)
                 .connectTimeout(Duration.ofSeconds(4))
@@ -630,14 +633,11 @@ public class FirebaseService {
     // Realtime Database: Test Attempts (`test_attempts/{uid}`)
     // =========================================================================
 
-    public boolean saveTestAttempt(String uid, TestAttempt attempt) {
-        if (uid == null || attempt == null) return false;
-
+    public JsonObject serializeTestAttempt(TestAttempt attempt, String uid, long now) {
         String attemptId = (attempt.getId() != null && !attempt.getId().isEmpty())
                 ? attempt.getId()
                 : UUID.randomUUID().toString();
         attempt.setId(attemptId);
-        long now = System.currentTimeMillis();
 
         JsonObject json = new JsonObject();
         json.addProperty("id", attemptId);
@@ -682,6 +682,7 @@ public class FirebaseService {
         json.addProperty("sectionBreakdownJson", attempt.getSectionBreakdownJson());
         json.addProperty("weakTopicsJson", attempt.getWeakTopicsJson());
         json.addProperty("recommendedPractice", attempt.getRecommendedPractice());
+        json.addProperty("questionReviewsJson", attempt.getQuestionReviewsJson());
         json.addProperty("seriesId", attempt.getSeriesId() != null ? attempt.getSeriesId() : "");
         json.addProperty("difficulty", attempt.getDifficulty() != null ? attempt.getDifficulty() : "Medium");
         json.addProperty("generationStartedAt", attempt.getGenerationStartedAt());
@@ -689,34 +690,80 @@ public class FirebaseService {
         json.addProperty("expiresAt", attempt.getExpiresAt());
         json.addProperty("selectedQuestionCount", attempt.getSelectedQuestionCount());
         json.addProperty("generationVersion", attempt.getGenerationVersion());
+        return json;
+    }
 
+    public JsonObject serializeTestResult(TestResult result) {
+        if (result == null) return new JsonObject();
+        JsonObject obj = new JsonObject();
+        obj.addProperty("resultId", result.getResultId());
+        obj.addProperty("attemptId", result.getAttemptId());
+        obj.addProperty("studentUid", result.getStudentUid());
+        obj.addProperty("studentName", result.getStudentName());
+        obj.addProperty("category", result.getCategory());
+        obj.addProperty("seriesId", result.getSeriesId());
+        obj.addProperty("seriesName", result.getSeriesName());
+        obj.addProperty("subject", result.getSubject());
+        obj.addProperty("difficulty", result.getDifficulty());
+        obj.addProperty("score", result.getScore());
+        obj.addProperty("accuracy", result.getAccuracy());
+        obj.addProperty("correctCount", result.getCorrectCount());
+        obj.addProperty("incorrectCount", result.getIncorrectCount());
+        obj.addProperty("unansweredCount", result.getUnansweredCount());
+        obj.addProperty("totalQuestions", result.getTotalQuestions());
+        obj.addProperty("passed", result.isPassed());
+        obj.addProperty("sectionBreakdownJson", result.getSectionBreakdownJson());
+        obj.addProperty("topicWisePerformanceJson", result.getTopicWisePerformanceJson());
+        obj.addProperty("weakTopicsJson", gson.toJson(result.getWeakTopics()));
+        obj.addProperty("questionReviewsJson", result.getQuestionReviewsJson());
+        obj.addProperty("completedAt", result.getCompletedAt());
+        return obj;
+    }
+
+    public boolean saveTestAttempt(String uid, TestAttempt attempt) {
+        if (uid == null || attempt == null) return false;
+
+        String attemptId = (attempt.getId() != null && !attempt.getId().isEmpty())
+                ? attempt.getId()
+                : UUID.randomUUID().toString();
+        attempt.setId(attemptId);
+        long now = System.currentTimeMillis();
+
+        JsonObject json = serializeTestAttempt(attempt, uid, now);
         String userUrl = databaseUrl + "/test_attempts/" + uid + "/" + attemptId + ".json";
         String globalUrl = databaseUrl + "/all_test_attempts/" + attemptId + ".json";
 
+        // Primary durable persistence to Realtime Database
         String resp1 = executeHttpRequest(userUrl, "PUT", json.toString());
-        executeHttpRequest(globalUrl, "PUT", json.toString());
 
-        saveFirestoreTestAttempt(attemptId, attempt);
+        // Asynchronous secondary operations (global mirror, Firestore, metrics) so submission responds in <300ms
+        CompletableFuture.runAsync(() -> {
+            try {
+                executeHttpRequest(globalUrl, "PUT", json.toString());
+                saveFirestoreTestAttempt(attemptId, attempt);
 
-        if (resp1 != null && !"in_progress".equalsIgnoreCase(attempt.getStatus())) {
-            Map<String, Object> updates = new HashMap<>();
-            String cat = attempt.getCategory() != null ? attempt.getCategory().toLowerCase() : "";
-            if (cat.contains("java") || cat.contains("tech")) {
-                updates.put("javaSkill", attempt.getScore());
-                updates.put("technicalScore", attempt.getScore());
-            } else if (cat.contains("dsa") || cat.contains("algo")) {
-                updates.put("dsaSkill", attempt.getScore());
-            } else if (cat.contains("sql") || cat.contains("dbms")) {
-                updates.put("sqlSkill", attempt.getScore());
-            } else if (cat.contains("aptitude") || cat.contains("quant")) {
-                updates.put("aptitudeSkill", attempt.getScore());
-            }
+                if (!"in_progress".equalsIgnoreCase(attempt.getStatus())) {
+                    Map<String, Object> updates = new HashMap<>();
+                    String cat = attempt.getCategory() != null ? attempt.getCategory().toLowerCase() : "";
+                    if (cat.contains("java") || cat.contains("tech")) {
+                        updates.put("javaSkill", attempt.getScore());
+                        updates.put("technicalScore", attempt.getScore());
+                    } else if (cat.contains("dsa") || cat.contains("algo")) {
+                        updates.put("dsaSkill", attempt.getScore());
+                    } else if (cat.contains("sql") || cat.contains("dbms")) {
+                        updates.put("sqlSkill", attempt.getScore());
+                    } else if (cat.contains("aptitude") || cat.contains("quant")) {
+                        updates.put("aptitudeSkill", attempt.getScore());
+                    }
 
-            StudentMetrics current = fetchStudentMetrics(uid);
-            updates.put("testsCompleted", current.getTestsCompleted() + 1);
-            updateStudentMetrics(uid, updates);
-            return true;
-        }
+                    StudentMetrics current = fetchStudentMetrics(uid);
+                    if (current != null) {
+                        updates.put("testsCompleted", current.getTestsCompleted() + 1);
+                        updateStudentMetrics(uid, updates);
+                    }
+                }
+            } catch (Exception ignored) {}
+        });
 
         return resp1 != null;
     }
@@ -744,6 +791,36 @@ public class FirebaseService {
 
         list.sort((a, b) -> Long.compare(b.getSavedAt(), a.getSavedAt()));
         return list;
+    }
+
+    public TestAttempt fetchTestAttemptById(String attemptId, String uid) {
+        if (attemptId == null || attemptId.trim().isEmpty()) return null;
+        if (databaseUrl == null) databaseUrl = Config.getFirebaseDatabaseUrl();
+
+        // 1. Try student's direct attempt node
+        if (uid != null && !uid.trim().isEmpty()) {
+            String userUrl = databaseUrl + "/test_attempts/" + uid + "/" + attemptId + ".json";
+            String userResp = executeHttpRequest(userUrl, "GET", null);
+            if (userResp != null && !userResp.equals("null") && !userResp.trim().isEmpty()) {
+                try {
+                    JsonObject obj = JsonParser.parseString(userResp).getAsJsonObject();
+                    return parseTestAttemptJson(attemptId, uid, obj);
+                } catch (Exception ignored) {}
+            }
+        }
+
+        // 2. Try all_test_attempts global node
+        String globalUrl = databaseUrl + "/all_test_attempts/" + attemptId + ".json";
+        String globalResp = executeHttpRequest(globalUrl, "GET", null);
+        if (globalResp != null && !globalResp.equals("null") && !globalResp.trim().isEmpty()) {
+            try {
+                JsonObject obj = JsonParser.parseString(globalResp).getAsJsonObject();
+                String userId = getString(obj, "userId", (uid != null ? uid : ""));
+                return parseTestAttemptJson(attemptId, userId, obj);
+            } catch (Exception ignored) {}
+        }
+
+        return null;
     }
 
     public List<TestAttempt> fetchAllTestAttempts() {
@@ -922,6 +999,7 @@ public class FirebaseService {
         t.setSectionBreakdownJson(getString(obj, "sectionBreakdownJson", "{}"));
         t.setWeakTopicsJson(getString(obj, "weakTopicsJson", "[]"));
         t.setRecommendedPractice(getString(obj, "recommendedPractice", ""));
+        t.setQuestionReviewsJson(getString(obj, "questionReviewsJson", "[]"));
         t.setSeriesId(getString(obj, "seriesId", ""));
         t.setDifficulty(getString(obj, "difficulty", "Medium"));
         if (obj.has("generationStartedAt")) t.setGenerationStartedAt(obj.get("generationStartedAt").getAsLong());
@@ -1135,5 +1213,98 @@ public class FirebaseService {
         } catch (Exception e) {
             return defVal;
         }
+    }
+
+    // =========================================================================
+    // SNJB Logical Collections: Question Sets, Attempts, Results & Security Events
+    // =========================================================================
+
+    public boolean saveSnjbQuestionSet(String setId, JsonObject questionSetJson) {
+        if (setId == null || questionSetJson == null) return false;
+        String url = databaseUrl + "/snjbQuestionSets/" + setId + ".json";
+        String resp = executeHttpRequest(url, "PUT", questionSetJson.toString());
+        return resp != null;
+    }
+
+    public JsonObject fetchReusableSnjbQuestionSet(String seriesId, String topic, String difficulty) {
+        if (databaseUrl == null) return null;
+        String url = databaseUrl + "/snjbQuestionSets.json";
+        String resp = executeHttpRequest(url, "GET", null);
+        if (resp == null || resp.equals("null") || resp.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            JsonObject sets = JsonParser.parseString(resp).getAsJsonObject();
+            long now = System.currentTimeMillis();
+            for (Map.Entry<String, JsonElement> e : sets.entrySet()) {
+                if (e.getValue().isJsonObject()) {
+                    JsonObject s = e.getValue().getAsJsonObject();
+                    String sSeries = getString(s, "seriesId", "");
+                    String sTopic = getString(s, "topic", "");
+                    String sDiff = getString(s, "difficulty", "Medium");
+                    String status = getString(s, "status", "ACTIVE");
+                    long expiresAt = s.has("expiresAt") ? s.get("expiresAt").getAsLong() : 0;
+
+                    if ("ACTIVE".equalsIgnoreCase(status) && (expiresAt == 0 || expiresAt > now)) {
+                        boolean seriesMatch = seriesId == null || seriesId.equalsIgnoreCase(sSeries);
+                        boolean topicMatch = topic == null || topic.equalsIgnoreCase(sTopic) ||
+                                (sTopic != null && topic != null && sTopic.toLowerCase().contains(topic.toLowerCase()));
+                        boolean diffMatch = difficulty == null || difficulty.equalsIgnoreCase(sDiff);
+
+                        if (seriesMatch && topicMatch && diffMatch) {
+                            return s;
+                        }
+                    }
+                }
+            }
+        } catch (Exception err) {
+            System.err.println("Notice: error searching reusable SNJB question sets: " + err.getMessage());
+        }
+        return null;
+    }
+
+    public boolean saveSnjbSecurityEvent(String attemptId, JsonObject eventJson) {
+        if (attemptId == null || eventJson == null) return false;
+        String eventId = "sec_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        eventJson.addProperty("eventId", eventId);
+        eventJson.addProperty("attemptId", attemptId);
+        if (!eventJson.has("timestamp")) {
+            eventJson.addProperty("timestamp", System.currentTimeMillis());
+        }
+
+        String url = databaseUrl + "/snjbSecurityEvents/" + attemptId + "/" + eventId + ".json";
+        String resp = executeHttpRequest(url, "PUT", eventJson.toString());
+        return resp != null;
+    }
+
+    public List<JsonObject> fetchSnjbSecurityEvents(String attemptId) {
+        List<JsonObject> list = new ArrayList<>();
+        if (attemptId == null) return list;
+
+        String url = databaseUrl + "/snjbSecurityEvents/" + attemptId + ".json";
+        String resp = executeHttpRequest(url, "GET", null);
+        if (resp != null && !resp.equals("null") && !resp.trim().isEmpty()) {
+            try {
+                JsonObject events = JsonParser.parseString(resp).getAsJsonObject();
+                for (Map.Entry<String, JsonElement> e : events.entrySet()) {
+                    if (e.getValue().isJsonObject()) {
+                        list.add(e.getValue().getAsJsonObject());
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        return list;
+    }
+
+    public boolean saveSnjbTestResult(TestResult result) {
+        if (result == null || result.getResultId() == null) return false;
+        String url = databaseUrl + "/snjbTestResults/" + result.getResultId() + ".json";
+        String resp = executeHttpRequest(url, "PUT", gson.toJson(result));
+        return resp != null;
+    }
+
+    public List<TestAttempt> fetchAllSnjbAttempts() {
+        return fetchAllTestAttempts();
     }
 }

@@ -46,7 +46,7 @@ public class PageController {
 
     @GetMapping({"/react-portal", "/react-portal.jsp", "/portal"})
     public String reactPortal(HttpServletRequest request) {
-        return "react-portal";
+        return "redirect:/dashboard";
     }
 
     @GetMapping("/react-app")

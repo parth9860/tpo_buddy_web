@@ -36,6 +36,7 @@ public class TestResult implements Serializable {
     private long timeTakenSeconds;
     private String proctoringStatus = "VALIDATED";
     private int riskScore = 0;
+    private String questionReviewsJson = "[]";
     private long completedAt = System.currentTimeMillis();
 
     public TestResult() {
@@ -239,6 +240,18 @@ public class TestResult implements Serializable {
 
     public void setRiskScore(int riskScore) {
         this.riskScore = riskScore;
+    }
+
+    public String getRiskLevel() {
+        return (riskScore <= 15) ? "LOW" : (riskScore <= 40 ? "MODERATE" : "HIGH");
+    }
+
+    public String getQuestionReviewsJson() {
+        return questionReviewsJson != null ? questionReviewsJson : "[]";
+    }
+
+    public void setQuestionReviewsJson(String questionReviewsJson) {
+        this.questionReviewsJson = questionReviewsJson;
     }
 
     public long getCompletedAt() {

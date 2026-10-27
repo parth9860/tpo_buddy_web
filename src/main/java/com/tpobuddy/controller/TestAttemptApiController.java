@@ -62,9 +62,25 @@ public class TestAttemptApiController {
         String difficulty = payload.has("difficulty") ? payload.get("difficulty").getAsString() : "Medium";
 
         List<String> topics = new ArrayList<>();
-        if (payload.has("topics") && payload.get("topics").isJsonArray()) {
-            for (JsonElement el : payload.getAsJsonArray("topics")) {
-                topics.add(el.getAsString());
+        if (payload.has("selectedTopics")) {
+            if (payload.get("selectedTopics").isJsonArray()) {
+                for (JsonElement el : payload.getAsJsonArray("selectedTopics")) {
+                    String t = el.getAsString();
+                    if (t != null && !t.trim().isEmpty()) topics.add(t.trim());
+                }
+            } else if (payload.get("selectedTopics").isJsonPrimitive()) {
+                String t = payload.get("selectedTopics").getAsString();
+                if (t != null && !t.trim().isEmpty()) topics.add(t.trim());
+            }
+        } else if (payload.has("topics")) {
+            if (payload.get("topics").isJsonArray()) {
+                for (JsonElement el : payload.getAsJsonArray("topics")) {
+                    String t = el.getAsString();
+                    if (t != null && !t.trim().isEmpty()) topics.add(t.trim());
+                }
+            } else if (payload.get("topics").isJsonPrimitive()) {
+                String t = payload.get("topics").getAsString();
+                if (t != null && !t.trim().isEmpty()) topics.add(t.trim());
             }
         }
 
@@ -92,6 +108,55 @@ public class TestAttemptApiController {
             err.addProperty("error", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err.toString());
         }
+    }
+
+    @GetMapping(value = "/active-session", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> getActiveSession(HttpServletRequest request) {
+        User user = getAuthenticatedUser(request);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("{\"hasActiveSession\":false}");
+        }
+
+        TestAttempt attempt = testAttemptService.getActiveAttemptForStudent(user.getUid());
+        if (attempt == null) {
+            return ResponseEntity.ok("{\"hasActiveSession\":false}");
+        }
+
+        long now = System.currentTimeMillis();
+        long remaining = Math.max(0, (attempt.getDeadline() - now) / 1000);
+        if (remaining <= 0) {
+            return ResponseEntity.ok("{\"hasActiveSession\":false}");
+        }
+
+        JsonArray questions = testAttemptService.getSanitizedQuestions(attempt.getId(), user.getUid());
+        if (questions == null || questions.isEmpty()) {
+            return ResponseEntity.ok("{\"hasActiveSession\":false}");
+        }
+
+        JsonObject resp = new JsonObject();
+        resp.addProperty("hasActiveSession", true);
+        resp.addProperty("attemptId", attempt.getId());
+        resp.addProperty("seriesId", attempt.getSeriesId());
+        resp.addProperty("category", attempt.getCategory());
+        resp.addProperty("topic", attempt.getTopic());
+        resp.addProperty("testTitle", attempt.getTestTitle() != null ? attempt.getTestTitle() : attempt.getTopic());
+        resp.addProperty("difficulty", attempt.getDifficulty());
+        resp.addProperty("remainingSeconds", remaining);
+        resp.addProperty("violationCount", attempt.getViolationCount());
+        resp.addProperty("questionCount", questions.size());
+
+        if (attempt.getSavedAnswersJson() != null && !attempt.getSavedAnswersJson().isEmpty()) {
+            try {
+                resp.add("savedAnswers", JsonParser.parseString(attempt.getSavedAnswersJson()));
+            } catch (Exception ignored) {
+                resp.add("savedAnswers", new JsonObject());
+            }
+        } else {
+            resp.add("savedAnswers", new JsonObject());
+        }
+
+        resp.add("questions", questions);
+        return ResponseEntity.ok(resp.toString());
     }
 
     @GetMapping(value = "/{attemptId}/status", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -203,7 +268,17 @@ public class TestAttemptApiController {
             }
         }
 
-        TestEvaluationService.EvaluationPayload eval = testAttemptService.submitAttempt(attemptId, user.getUid(), answers, reason);
+        TestEvaluationService.EvaluationPayload eval;
+        try {
+            eval = testAttemptService.submitAttempt(attemptId, user.getUid(), answers, reason);
+        } catch (SecurityException se) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("{\"success\":false,\"error\":\"" + se.getMessage() + "\"}");
+        } catch (Exception ex) {
+            System.err.println("Error during exam finalization: " + ex.getMessage());
+            ex.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("{\"success\":false,\"error\":\"Internal error finalizing exam: " + (ex.getMessage() != null ? ex.getMessage() : "Unknown") + "\"}");
+        }
+        TestController.clearActiveSession(user.getUid());
         if (eval == null) {
             TestAttempt fallbackAtt = new TestAttempt();
             fallbackAtt.setId(attemptId);
@@ -213,29 +288,43 @@ public class TestAttemptApiController {
             eval = new TestEvaluationService().evaluateAttempt(fallbackAtt, fallbackQs, answers, null);
         }
 
-        TestResult res = eval.result;
+        TestResult res = eval != null ? eval.result : null;
+        String finalAttemptId = (res != null && res.getAttemptId() != null) ? res.getAttemptId() : attemptId;
         JsonObject resp = new JsonObject();
         resp.addProperty("success", true);
-        resp.addProperty("attemptId", res.getAttemptId());
-        resp.addProperty("resultId", res.getResultId());
-        resp.addProperty("category", res.getCategory());
-        resp.addProperty("seriesName", res.getSeriesName());
-        resp.addProperty("difficulty", res.getDifficulty());
-        resp.addProperty("score", res.getScore());
-        resp.addProperty("accuracy", res.getAccuracy());
-        resp.addProperty("correctCount", res.getCorrectCount());
-        resp.addProperty("incorrectCount", res.getIncorrectCount());
-        resp.addProperty("unansweredCount", res.getUnansweredCount());
-        resp.addProperty("totalQuestions", res.getTotalQuestions());
-        resp.addProperty("passed", res.isPassed());
-        resp.addProperty("timeTakenSeconds", res.getTimeTakenSeconds());
-        resp.addProperty("proctoringStatus", res.getProctoringStatus());
-        resp.addProperty("riskScore", res.getRiskScore());
-        resp.add("sectionBreakdown", JsonParser.parseString(res.getSectionBreakdownJson()));
-        resp.add("topicWisePerformance", JsonParser.parseString(res.getTopicWisePerformanceJson()));
-        resp.add("weakTopics", gson.toJsonTree(res.getWeakTopics()));
-        resp.add("recommendedRevisionTopics", gson.toJsonTree(res.getRecommendedRevisionTopics()));
-        resp.add("reviews", eval.questionReviews);
+        resp.addProperty("attemptId", finalAttemptId);
+        resp.addProperty("resultId", (res != null && res.getResultId() != null) ? res.getResultId() : ("res_" + attemptId));
+        resp.addProperty("redirectUrl", request.getContextPath() + "/test-result?attemptId=" + finalAttemptId);
+        resp.addProperty("category", res != null ? res.getCategory() : "COLLEGE");
+        resp.addProperty("seriesName", res != null ? res.getSeriesName() : "Placement Series");
+        resp.addProperty("difficulty", res != null ? res.getDifficulty() : "Medium");
+        resp.addProperty("score", res != null ? res.getScore() : 0);
+        resp.addProperty("accuracy", res != null ? res.getAccuracy() : 0.0);
+        resp.addProperty("correctCount", res != null ? res.getCorrectCount() : 0);
+        resp.addProperty("incorrectCount", res != null ? res.getIncorrectCount() : 0);
+        resp.addProperty("unansweredCount", res != null ? res.getUnansweredCount() : 0);
+        resp.addProperty("totalQuestions", res != null ? res.getTotalQuestions() : 30);
+        resp.addProperty("passed", res != null && res.isPassed());
+        resp.addProperty("timeTakenSeconds", res != null ? res.getTimeTakenSeconds() : 0);
+        resp.addProperty("proctoringStatus", res != null ? res.getProctoringStatus() : "VALIDATED");
+        resp.addProperty("riskScore", res != null ? res.getRiskScore() : 0);
+        try {
+            resp.add("sectionBreakdown", (res != null && res.getSectionBreakdownJson() != null && !res.getSectionBreakdownJson().isEmpty())
+                    ? JsonParser.parseString(res.getSectionBreakdownJson()) : new JsonObject());
+        } catch (Exception e) {
+            resp.add("sectionBreakdown", new JsonObject());
+        }
+
+        try {
+            resp.add("topicWisePerformance", (res.getTopicWisePerformanceJson() != null && !res.getTopicWisePerformanceJson().isEmpty())
+                    ? JsonParser.parseString(res.getTopicWisePerformanceJson()) : new JsonObject());
+        } catch (Exception e) {
+            resp.add("topicWisePerformance", new JsonObject());
+        }
+
+        resp.add("weakTopics", res.getWeakTopics() != null ? gson.toJsonTree(res.getWeakTopics()) : new JsonArray());
+        resp.add("recommendedRevisionTopics", res.getRecommendedRevisionTopics() != null ? gson.toJsonTree(res.getRecommendedRevisionTopics()) : new JsonArray());
+        resp.add("reviews", eval.questionReviews != null ? eval.questionReviews : new JsonArray());
 
         return ResponseEntity.ok(resp.toString());
     }

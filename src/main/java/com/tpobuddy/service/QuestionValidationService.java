@@ -137,8 +137,15 @@ public class QuestionValidationService {
      * Returns a list of strictly valid, unique questions.
      */
     public List<Question> filterValidPool(List<Question> rawPool) {
+        return filterValidPool(rawPool, null);
+    }
+
+    /**
+     * Validates candidate questions against structure, duplicate prevention, and allowed topics.
+     */
+    public List<Question> filterValidPool(List<Question> rawPool, List<String> allowedTopics) {
         if (rawPool == null || rawPool.isEmpty()) {
-            return Collections.emptyList();
+            return new ArrayList<>();
         }
 
         List<Question> validList = new ArrayList<>();
@@ -147,6 +154,12 @@ public class QuestionValidationService {
         for (Question q : rawPool) {
             ValidationResult vr = validateQuestion(q);
             if (vr.isValid()) {
+                // If allowed topics are restricted, verify question's topic matches
+                if (allowedTopics != null && !allowedTopics.isEmpty()) {
+                    if (!PlacementQuestionBank.isQuestionInTopics(q, allowedTopics)) {
+                        continue; // Reject questions from unconfigured topics
+                    }
+                }
                 String normalized = normalizeForDeduplication(q.getQuestion());
                 if (!seenNormalizedQuestions.contains(normalized)) {
                     seenNormalizedQuestions.add(normalized);

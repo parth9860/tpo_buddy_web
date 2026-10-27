@@ -136,29 +136,41 @@ export default function App() {
         })
       });
       const data = await res.json();
-      if (data.success) {
+      if (data && data.success) {
         setEvalResult({ score: data.score, feedback: data.feedback });
         setTimeout(async () => {
-          if (data.isCompleted) {
-            const finishRes = await fetch('/api/interview/finish', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sessionId: interviewSessionId })
-            });
-            const finishData = await finishRes.json();
-            setInterviewReport(finishData.report);
-            setInterviewState('REPORT');
-          } else if (data.nextQuestion) {
-            setCurrentQ(data.nextQuestion);
-            setQIndex(data.nextQuestionIndex);
-            setAnswerText('');
-            setEvalResult(null);
+          try {
+            if (data.isCompleted) {
+              const finishRes = await fetch('/api/interview/finish', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId: interviewSessionId })
+              });
+              const finishData = await finishRes.json();
+              if (finishData && finishData.success) {
+                setInterviewReport(finishData.report);
+                setInterviewState('REPORT');
+              }
+            } else if (data.nextQuestion) {
+              setCurrentQ(data.nextQuestion);
+              setQIndex(data.nextQuestionIndex);
+              setAnswerText('');
+              setEvalResult(null);
+            }
+          } catch (finishErr) {
+            console.error('Error concluding interview answer:', finishErr);
+          } finally {
+            setIsSubmitting(false);
           }
-          setIsSubmitting(false);
         }, 2000);
+      } else {
+        setIsSubmitting(false);
+        alert((data && (data.error || data.message)) || 'Unable to evaluate answer. Please try again.');
       }
     } catch (err) {
       setIsSubmitting(false);
+      console.error('Answer submission network error:', err);
+      alert('Network error while submitting answer. Please verify connection and retry.');
     }
   };
 

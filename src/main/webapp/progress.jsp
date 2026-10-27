@@ -106,6 +106,7 @@
                                 <th>Correct Answers</th>
                                 <th>Result Status</th>
                                 <th>Timestamp</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -121,15 +122,20 @@
                                     <td><%= t.getCorrectAnswers() %> / <%= t.getTotalQuestions() %></td>
                                     <td>
                                         <span class="badge <%= t.isPassed() ? "badge-success" : "badge-warning" %>">
-                                            <%= t.isPassed() ? "PASSED (≥ 60%)" : "NEEDS PRACTICE" %>
+                                             <%= t.isPassed() ? "PASSED (≥ 60%)" : "NEEDS PRACTICE" %>
                                         </span>
                                     </td>
                                     <td><%= sdf.format(new Date(t.getSavedAt())) %></td>
+                                    <td>
+                                        <a href="${pageContext.request.contextPath}/test-result?attemptId=<%= t.getId() %>" class="btn btn-outline btn-sm" style="padding: 0.25rem 0.65rem; font-size: 0.75rem;">
+                                            🔍 Review
+                                        </a>
+                                    </td>
                                 </tr>
                             <%  }
                             } else { %>
                                 <tr>
-                                    <td colspan="7" style="text-align: center; padding: 3rem; color: var(--text-muted);">
+                                    <td colspan="8" style="text-align: center; padding: 3rem; color: var(--text-muted);">
                                         No assessment records found. Update your profile and skills to boost your placement readiness score.
                                         <div style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: center;">
                                             <a href="${pageContext.request.contextPath}/tests" class="btn btn-primary btn-sm">Start Placement Test</a>

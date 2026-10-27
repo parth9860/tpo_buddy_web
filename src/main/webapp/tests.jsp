@@ -73,6 +73,60 @@
             box-sizing: border-box !important;
         }
 
+        /* ------------------------------------------------------------------ */
+        /* Authoritative Modal Overlays (Always on top of Fullscreen Runner)   */
+        /* ------------------------------------------------------------------ */
+        .security-modal-overlay {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            background: rgba(15, 23, 42, 0.92) !important;
+            backdrop-filter: blur(8px) !important;
+            display: none !important;
+            align-items: center !important;
+            justify-content: center !important;
+            z-index: 10000000 !important;
+            padding: 1.5rem !important;
+            box-sizing: border-box !important;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+        .security-modal-overlay.active {
+            display: flex !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+        .modal-overlay {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            background: rgba(15, 23, 42, 0.75) !important;
+            backdrop-filter: blur(6px) !important;
+            display: none !important;
+            align-items: center !important;
+            justify-content: center !important;
+            z-index: 10000001 !important;
+            padding: 1.5rem !important;
+            box-sizing: border-box !important;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+        .modal-overlay.active {
+            display: flex !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+
         /* Top Category Navigation Tabs */
         .category-nav-bar {
             display: flex;
@@ -407,6 +461,9 @@
             align-items: center;
             gap: 0.35rem;
         }
+        @keyframes submitSpin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -538,15 +595,17 @@
                         <!-- Priority 6 Foundational Modules -->
                         <div style="margin-top: 1.25rem; pt: 1rem; border-top: 1px dashed #bfdbfe;">
                             <div style="font-size: 0.8rem; font-weight: 700; color: #1e40af; margin-bottom: 0.5rem;">
-                                ⚡ Quick 10-Question Foundational Priority Drills:
+                                ⚡ SNJB Core Priority 6 Modules (Strict Topic Control):
                             </div>
                             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                                <button type="button" class="btn btn-outline btn-sm" style="background:#fff; font-size:0.775rem;" onclick="initiateExamSetup('college_snjb_quant', 'Quantitative Aptitude', 'COLLEGE', 'Quantitative Aptitude', 'Number system, HCF/LCM, divisibility')">1. Number System & HCF</button>
-                                <button type="button" class="btn btn-outline btn-sm" style="background:#fff; font-size:0.775rem;" onclick="initiateExamSetup('college_snjb_quant', 'Quantitative Aptitude', 'COLLEGE', 'Quantitative Aptitude', 'Percentages, profit and loss, discounts')">2. Percentages & Profit/Loss</button>
-                                <button type="button" class="btn btn-outline btn-sm" style="background:#fff; font-size:0.775rem;" onclick="initiateExamSetup('college_snjb_quant', 'Quantitative Aptitude', 'COLLEGE', 'Quantitative Aptitude', 'Ratio, proportion, averages, mixtures and alligation')">3. Ratio & Averages</button>
-                                <button type="button" class="btn btn-outline btn-sm" style="background:#fff; font-size:0.775rem;" onclick="initiateExamSetup('college_snjb_quant', 'Quantitative Aptitude', 'COLLEGE', 'Quantitative Aptitude', 'Time and work, pipes and cisterns')">4. Time and Work</button>
-                                <button type="button" class="btn btn-outline btn-sm" style="background:#fff; font-size:0.775rem;" onclick="initiateExamSetup('college_snjb_quant', 'Quantitative Aptitude', 'COLLEGE', 'Quantitative Aptitude', 'Time, speed and distance, trains, boats and streams')">5. Speed & Distance</button>
-                                <button type="button" class="btn btn-outline btn-sm" style="background:#fff; font-size:0.775rem;" onclick="initiateExamSetup('college_snjb_quant', 'Quantitative Aptitude', 'COLLEGE', 'Quantitative Aptitude', 'Permutations, combinations, probability')">6. Probability & PnC</button>
+                                <button type="button" class="btn btn-outline btn-sm" style="background:#fff; font-size:0.775rem;" onclick="initiateExamSetup('college_snjb_quant', 'Number System, HCF & Divisibility', 'COLLEGE', 'Quantitative Aptitude', 'Number System, HCF and LCM, Divisibility Rules')">📐 Number System, HCF & Divisibility</button>
+                                <button type="button" class="btn btn-outline btn-sm" style="background:#fff; font-size:0.775rem;" onclick="initiateExamSetup('college_snjb_quant', 'Percentages, Profit/Loss & Discounts', 'COLLEGE', 'Quantitative Aptitude', 'Percentages, Profit and Loss, Discounts')">🏷️ Percentages, Profit/Loss & Discounts</button>
+                                <button type="button" class="btn btn-outline btn-sm" style="background:#fff; font-size:0.775rem;" onclick="initiateExamSetup('college_snjb_quant', 'Number System Focused Test', 'COLLEGE', 'Quantitative Aptitude', 'Number System')">1. Number System</button>
+                                <button type="button" class="btn btn-outline btn-sm" style="background:#fff; font-size:0.775rem;" onclick="initiateExamSetup('college_snjb_quant', 'HCF and LCM Focused Test', 'COLLEGE', 'Quantitative Aptitude', 'HCF and LCM')">2. HCF and LCM</button>
+                                <button type="button" class="btn btn-outline btn-sm" style="background:#fff; font-size:0.775rem;" onclick="initiateExamSetup('college_snjb_quant', 'Divisibility Rules Test', 'COLLEGE', 'Quantitative Aptitude', 'Divisibility Rules')">3. Divisibility Rules</button>
+                                <button type="button" class="btn btn-outline btn-sm" style="background:#fff; font-size:0.775rem;" onclick="initiateExamSetup('college_snjb_quant', 'Percentages Focused Test', 'COLLEGE', 'Quantitative Aptitude', 'Percentages')">4. Percentages</button>
+                                <button type="button" class="btn btn-outline btn-sm" style="background:#fff; font-size:0.775rem;" onclick="initiateExamSetup('college_snjb_quant', 'Profit and Loss Test', 'COLLEGE', 'Quantitative Aptitude', 'Profit and Loss')">5. Profit and Loss</button>
+                                <button type="button" class="btn btn-outline btn-sm" style="background:#fff; font-size:0.775rem;" onclick="initiateExamSetup('college_snjb_quant', 'Discounts Focused Test', 'COLLEGE', 'Quantitative Aptitude', 'Discounts')">6. Discounts</button>
                             </div>
                         </div>
                     </div>
@@ -661,6 +720,7 @@
                                     <th>Integrity Risk</th>
                                     <th>Status</th>
                                     <th>Date Completed</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -696,11 +756,16 @@
                                             </span>
                                         </td>
                                         <td><%= sdf.format(new Date(a.getSavedAt())) %></td>
+                                        <td>
+                                            <a href="${pageContext.request.contextPath}/test-result?attemptId=<%= a.getId() %>" class="btn btn-outline btn-xs" style="color: var(--primary); font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem;">
+                                                <span>📊</span> Review
+                                            </a>
+                                        </td>
                                     </tr>
                                 <%  }
                                 } else { %>
                                     <tr>
-                                        <td colspan="8" style="text-align: center; padding: 3rem; color: var(--text-muted);">
+                                        <td colspan="9" style="text-align: center; padding: 3rem; color: var(--text-muted);">
                                             No test attempts recorded yet. Choose any test above to start your practice.
                                         </td>
                                     </tr>
@@ -726,7 +791,17 @@
                         <h2 id="runnerQuestionNumber" style="font-size: 1.35rem; margin: 0.25rem 0 0 0;">Question 1 of 30</h2>
                     </div>
 
-                    <div style="display: flex; align-items: center; gap: 1rem;">
+                    <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                        <!-- Autosave indicator -->
+                        <div id="runnerSaveStatus" style="font-size: 0.8rem; font-weight: 600; color: #10b981; display: flex; align-items: center; gap: 0.35rem;">
+                            <span style="font-size: 0.7rem;">●</span> Auto-saved
+                        </div>
+
+                        <!-- Visible Violation Counter -->
+                        <div id="runnerViolationBadge" style="display: flex; align-items: center; gap: 0.4rem; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 0.35rem 0.75rem; border-radius: var(--radius-sm); font-size: 0.8rem; font-weight: 700;">
+                            <span>⚠️</span> Violations: <span id="runnerViolationCountText">0</span> / 3
+                        </div>
+
                         <div style="display: flex; align-items: center; gap: 0.5rem; background: #f8fafc; padding: 0.5rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
                             <span style="font-size: 1.25rem;">⏱️</span>
                             <div>
@@ -987,25 +1062,61 @@
 
             <!-- Security Warning Modal (Three-Strike Anti-Cheat) -->
             <div id="securityWarningModal" class="security-modal-overlay">
-                <div class="security-modal-card">
-                    <div class="security-modal-header">
-                        <span style="font-size: 1.75rem;">🚨</span>
+                <div class="security-modal-card" style="max-width: 520px; border: 2px solid #dc2626; box-shadow: 0 20px 40px rgba(220, 38, 38, 0.25);">
+                    <div class="security-modal-header" style="background: #fef2f2; border-bottom: 1px solid #fee2e2; padding: 1.25rem 1.5rem; display: flex; align-items: center; gap: 1rem;">
+                        <span style="font-size: 2rem;">🚨</span>
                         <div>
-                            <h3 class="security-modal-title" id="securityModalTitle">Security Warning 1/3</h3>
-                            <div style="font-size: 0.8rem; color: #b91c1c; font-weight: 600;">Integrity Violation Detected</div>
+                            <h3 class="security-modal-title" id="securityModalTitle" style="color: #991b1b; font-size: 1.25rem; font-weight: 800; margin: 0;">Security Warning (1/3)</h3>
+                            <div id="securityModalSubtitle" style="font-size: 0.825rem; color: #b91c1c; font-weight: 600; margin-top: 0.2rem;">Integrity Violation Detected</div>
                         </div>
                     </div>
-                    <div class="security-modal-body">
-                        <p style="font-size: 0.95rem; color: #991b1b; margin-bottom: 0.75rem;">
-                            Exiting fullscreen or switching windows is prohibited during examination.
+                    <div class="security-modal-body" style="padding: 1.5rem;">
+                        <p id="securityModalMessage" style="font-size: 0.95rem; color: #1e293b; line-height: 1.6; margin-bottom: 1rem; font-weight: 500;">
+                            Warning 1/3: You have left fullscreen mode or switched away from the exam. Return to the assessment immediately. Further violations may affect your exam.
                         </p>
-                        <div style="font-size: 0.85rem; color: var(--text-muted);">
-                            Violations remaining before auto-submission: <strong id="violationsRemainingCount" style="color: #dc2626; font-size: 1.1rem;">2</strong>
+                        <div style="background: #fff5f5; border: 1px solid #fed7d7; border-radius: var(--radius-sm); padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.875rem;">
+                            <span style="color: #742a2a; font-weight: 600;">Violation Count:</span>
+                            <span style="color: #dc2626; font-weight: 800; font-size: 1.1rem;"><span id="securityModalCurrentCount">1</span> / 3</span>
+                        </div>
+                        <div id="securityNextStepNotice" style="margin-top: 0.75rem; font-size: 0.8rem; color: #64748b;">
+                            Violations remaining before exam penalty/termination: <strong id="violationsRemainingCount" style="color: #dc2626;">2</strong>
+                        </div>
+
+                        <!-- Live Proctoring Camera Feed in Modal -->
+                        <div style="margin-top: 1rem; display: flex; align-items: center; gap: 1rem; background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 0.75rem;">
+                            <video id="securityWarningWebcamPip" autoplay muted playsinline style="width: 120px; height: 90px; object-fit: cover; border-radius: 6px; border: 2px solid #ef4444; background: #000; flex-shrink: 0;"></video>
+                            <div>
+                                <div style="font-size: 0.825rem; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 0.35rem;">
+                                    <span style="color: #10b981; font-size: 0.8rem;">●</span> Camera Monitoring Active
+                                </div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem; line-height: 1.4;">
+                                    Webcam is continuously recording your test environment. Return to fullscreen immediately.
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="security-modal-footer">
-                        <button type="button" class="btn btn-primary btn-sm" onclick="acknowledgeWarningAndReturnFullscreen()" style="background: #dc2626; border-color: #b91c1c;">
-                            Return to Fullscreen & Continue Test →
+                    <div class="security-modal-footer" style="padding: 1rem 1.5rem; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end;">
+                        <button type="button" id="btnAcknowledgeSecurity" class="btn btn-primary" onclick="acknowledgeWarningAndReturnFullscreen()" style="background: #dc2626; border-color: #b91c1c; font-weight: 700; width: 100%;">
+                            Return to Fullscreen & Continue Assessment →
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submission Progress and Status Overlay -->
+            <div id="submissionStatusOverlay" class="security-modal-overlay" style="display: none; z-index: 10000002 !important;">
+                <div class="security-modal-card" style="max-width: 480px; text-align: center; padding: 2.5rem 2rem; border-radius: var(--radius-md); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35); border: 2px solid var(--primary); background: #ffffff;">
+                    <div id="submissionStatusSpinner" style="margin-bottom: 1.25rem;">
+                        <div class="spinner" style="width: 50px; height: 50px; border: 4px solid #e2e8f0; border-top-color: var(--primary); border-radius: 50%; margin: 0 auto; animation: submitSpin 0.8s linear infinite;"></div>
+                    </div>
+                    <div id="submissionStatusIcon" style="font-size: 2.5rem; display: none; margin-bottom: 0.75rem;">⚠️</div>
+                    <h3 id="submissionStatusTitle" style="font-size: 1.3rem; font-weight: 800; color: var(--text-primary); margin: 0 0 0.5rem 0;">Submitting Your Exam</h3>
+                    <p id="submissionStatusDesc" style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.5; margin: 0 0 1.25rem 0;">
+                        Saving answers and finalizing your score on the server...
+                    </p>
+                    <div id="submissionRetryContainer" style="display: none;">
+                        <button type="button" id="btnRetrySubmit" class="btn btn-primary" onclick="retrySubmitAssessment()" style="font-weight: 700; width: 100%;">
+                            🔄 Retry Safe Submission
                         </button>
                     </div>
                 </div>
@@ -1030,9 +1141,47 @@
                             <div>Violations: <strong id="resumeViolationCount" style="color: #dc2626;">0 / 3</strong></div>
                         </div>
                     </div>
-                    <div class="modal-footer">
+                    <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+                        <button type="button" class="btn btn-outline" onclick="dismissResumeModal()">Dismiss</button>
                         <button type="button" class="btn btn-primary" onclick="resumeActiveExamInFullscreen()">
                             Enter Fullscreen & Resume Assessment →
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Exam Submission Confirmation Dialog -->
+            <div id="examSubmitConfirmModal" class="modal-overlay">
+                <div class="modal-card" style="max-width: 480px;">
+                    <div class="modal-header">
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <span style="font-size: 1.5rem;">📋</span>
+                            <h3 class="modal-title">Confirm Exam Submission</h3>
+                        </div>
+                    </div>
+                    <div class="modal-body">
+                        <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+                            Are you sure you want to finalize and submit your assessment? Once submitted, answers cannot be modified.
+                        </p>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 1rem; text-align: center; margin-bottom: 1rem;">
+                            <div>
+                                <div id="confirmAnsweredCount" style="font-size: 1.35rem; font-weight: 800; color: #10b981;">0</div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Attempted</div>
+                            </div>
+                            <div>
+                                <div id="confirmUnansweredCount" style="font-size: 1.35rem; font-weight: 800; color: #f59e0b;">0</div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Unanswered</div>
+                            </div>
+                            <div>
+                                <div id="confirmMarkedCount" style="font-size: 1.35rem; font-weight: 800; color: #6366f1;">0</div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Marked</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+                        <button type="button" class="btn btn-outline" onclick="closeSubmitConfirmModal()">Keep Reviewing</button>
+                        <button type="button" id="btnFinalSubmitConfirm" class="btn btn-primary" onclick="executeFinalSubmit('student_submitted')" style="background: #10b981; border-color: #059669; font-weight: 700;">
+                            Yes, Finalize & Submit
                         </button>
                     </div>
                 </div>

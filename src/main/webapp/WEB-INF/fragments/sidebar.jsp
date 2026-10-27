@@ -64,12 +64,6 @@
             </a>
         </li>
         <li>
-            <a href="${pageContext.request.contextPath}/react-portal" class="nav-item-link <%= currentPath.contains("react-portal") ? "active" : "" %>" style="border: 1px dashed rgba(99, 102, 241, 0.4); border-radius: 8px; margin: 0.25rem 0; background: rgba(99, 102, 241, 0.05);">
-                <span class="nav-icon">&#9883;</span>
-                <span style="font-weight: 600; color: #4f46e5;">React Modern Hub</span>
-            </a>
-        </li>
-        <li>
             <a href="${pageContext.request.contextPath}/profile" class="nav-item-link <%= currentPath.contains("profile") ? "active" : "" %>">
                 <span class="nav-icon">&#128100;</span>
                 <span>Profile</span>

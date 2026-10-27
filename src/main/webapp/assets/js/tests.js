@@ -26,12 +26,48 @@ let selectedSubject = 'Multi-Section Assessment';
 let selectedTopics = null;
 let selectedDifficulty = 'Medium';
 let isSubmitting = false;
+let submissionState = 'IN_PROGRESS'; // 'IN_PROGRESS', 'SUBMITTING', 'SUBMITTED', 'SUBMISSION_FAILED'
+let pendingAutosavePromise = null;
+let lastSubmissionReason = 'manual';
 let violationCount = 0;
 let lastViolationTime = 0;
 let watchdogsAttached = false;
 let pollingInterval = null;
+let isWarningModalOpen = false;
+let violationCooldown = false;
 
-window.stopProctorWebcam = function() {
+function updateViolationCounterDisplay() {
+    const badgeText = document.getElementById('runnerViolationCountText');
+    if (badgeText) {
+        badgeText.textContent = violationCount;
+    }
+    const remCount = document.getElementById('violationsRemainingCount');
+    if (remCount) {
+        remCount.textContent = Math.max(0, 3 - violationCount);
+    }
+    const currentCount = document.getElementById('securityModalCurrentCount');
+    if (currentCount) {
+        currentCount.textContent = violationCount;
+    }
+    const badgeContainer = document.getElementById('runnerViolationBadge');
+    if (badgeContainer) {
+        if (violationCount === 0) {
+            badgeContainer.style.background = '#f8fafc';
+            badgeContainer.style.borderColor = '#e2e8f0';
+            badgeContainer.style.color = 'var(--text-secondary)';
+        } else if (violationCount === 1) {
+            badgeContainer.style.background = '#fef3c7';
+            badgeContainer.style.borderColor = '#fde68a';
+            badgeContainer.style.color = '#b45309';
+        } else {
+            badgeContainer.style.background = '#fef2f2';
+            badgeContainer.style.borderColor = '#fecaca';
+            badgeContainer.style.color = '#b91c1c';
+        }
+    }
+}
+
+window.stopProctorWebcam = function () {
     if (cameraStream) {
         try {
             cameraStream.getTracks().forEach(t => t.stop());
@@ -192,7 +228,7 @@ async function startExamInFullscreen() {
         if (!document.fullscreenElement) {
             const doc = document.documentElement;
             if (doc.requestFullscreen) {
-                doc.requestFullscreen().catch(() => {});
+                doc.requestFullscreen().catch(() => { });
             } else if (doc.webkitRequestFullscreen) {
                 doc.webkitRequestFullscreen();
             } else if (doc.msRequestFullscreen) {
@@ -206,6 +242,16 @@ async function startExamInFullscreen() {
     // 2. Lock down UI immediately: hide sidebar, navbar, and headers
     document.body.classList.add('in-exam-mode');
     document.documentElement.classList.add('in-exam-mode');
+
+    // Proactively initialize webcam if not already connected
+    if (!cameraStream && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: { width: 480, height: 360 } })
+            .then(stream => {
+                cameraStream = stream;
+                attachStreamToAllPips();
+            })
+            .catch(e => console.warn('Proctor camera notice:', e));
+    }
 
     // Ensure latest difficulty selection is picked up
     const diffInput = document.getElementById('selectedDifficultyInput');
@@ -409,6 +455,10 @@ async function fetchAndLaunchQuestions(attemptId) {
 }
 
 function switchToExamRunnerView(category, title, difficulty) {
+    isSubmitting = false;
+    submissionState = 'IN_PROGRESS';
+    hideSubmissionStatusOverlay();
+
     document.body.classList.add('in-exam-mode');
     document.documentElement.classList.add('in-exam-mode');
 
@@ -434,8 +484,10 @@ function switchToExamRunnerView(category, title, difficulty) {
     if (pip && cameraStream) {
         pip.srcObject = cameraStream;
         pip.style.display = 'block';
-        pip.play().catch(() => {});
+        pip.play().catch(() => { });
     }
+
+    updateViolationCounterDisplay();
 }
 
 // -------------------------------------------------------------
@@ -570,33 +622,65 @@ function renderCurrentQuestion() {
 }
 
 function selectOption(optIndex) {
+    if (isSubmitting || submissionState !== 'IN_PROGRESS') return;
     const q = currentQuestions[currentIndex];
     userAnswers[q.id] = optIndex;
     renderCurrentQuestion();
     renderQuestionPalette();
 
-    // Autosave progress asynchronously
-    if (activeAttemptId) {
-        fetch(`${window.CONTEXT_PATH}/api/test-attempts/${activeAttemptId}/save-progress`, {
+    const saveStatus = document.getElementById('runnerSaveStatus');
+    if (saveStatus) {
+        saveStatus.innerHTML = '<span style="color: #f59e0b; font-size: 0.7rem;">●</span> Saving...';
+    }
+
+    // Autosave progress asynchronously with bounded promise tracking
+    if (activeAttemptId && submissionState === 'IN_PROGRESS') {
+        pendingAutosavePromise = fetch(`${window.CONTEXT_PATH}/api/test-attempts/${activeAttemptId}/save-progress`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ answers: userAnswers })
-        }).catch(() => {});
+        }).then(() => {
+            if (saveStatus) {
+                saveStatus.innerHTML = '<span style="color: #10b981; font-size: 0.7rem;">●</span> Auto-saved';
+            }
+        }).catch(() => {
+            if (saveStatus) {
+                saveStatus.innerHTML = '<span style="color: #64748b; font-size: 0.7rem;">●</span> Saved locally';
+            }
+        }).finally(() => {
+            pendingAutosavePromise = null;
+        });
     }
 }
 
 function clearCurrentResponse() {
+    if (isSubmitting || submissionState !== 'IN_PROGRESS') return;
     const q = currentQuestions[currentIndex];
     delete userAnswers[q.id];
     renderCurrentQuestion();
     renderQuestionPalette();
 
-    if (activeAttemptId) {
-        fetch(`${window.CONTEXT_PATH}/api/test-attempts/${activeAttemptId}/save-progress`, {
+    const saveStatus = document.getElementById('runnerSaveStatus');
+    if (saveStatus) {
+        saveStatus.innerHTML = '<span style="color: #f59e0b; font-size: 0.7rem;">●</span> Saving...';
+    }
+
+    if (activeAttemptId && submissionState === 'IN_PROGRESS') {
+        pendingAutosavePromise = fetch(`${window.CONTEXT_PATH}/api/test-attempts/${activeAttemptId}/save-progress`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ answers: userAnswers })
-        }).catch(() => {});
+        }).then(() => {
+            if (saveStatus) {
+                saveStatus.innerHTML = '<span style="color: #10b981; font-size: 0.7rem;">●</span> Auto-saved';
+            }
+        }).catch(() => {
+            if (saveStatus) {
+                saveStatus.innerHTML = '<span style="color: #64748b; font-size: 0.7rem;">●</span> Saved locally';
+            }
+        }).finally(() => {
+            pendingAutosavePromise = null;
+        });
     }
 }
 
@@ -727,63 +811,381 @@ function updateTimerDisplay() {
 }
 
 // -------------------------------------------------------------
+// Persistent Proctoring Camera Engine & Stream Protection
+// -------------------------------------------------------------
+
+let cameraHeartbeatInterval = null;
+let recoveringCamera = false;
+
+function bindCameraEvents(videoEl) {
+    if (!videoEl) return;
+    ['pause', 'suspend', 'abort', 'stalled', 'emptied'].forEach(evt => {
+        videoEl.addEventListener(evt, () => {
+            if (cameraStream && !isSubmitting) {
+                if (videoEl.srcObject !== cameraStream) {
+                    videoEl.srcObject = cameraStream;
+                }
+                videoEl.play().catch(() => { });
+            }
+        });
+    });
+}
+
+function keepCameraActive() {
+    if (isSubmitting) return;
+
+    if (cameraStream) {
+        cameraStream.getVideoTracks().forEach(t => {
+            if (!t.enabled) t.enabled = true;
+        });
+    }
+
+    // Check if cameraStream exists and has active tracks
+    const hasLiveTracks = cameraStream && cameraStream.getVideoTracks().some(t => t.readyState === 'live' && t.enabled);
+    if (!hasLiveTracks) {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && !recoveringCamera) {
+            recoveringCamera = true;
+            navigator.mediaDevices.getUserMedia({ video: { width: 480, height: 360 } })
+                .then(stream => {
+                    cameraStream = stream;
+                    recoveringCamera = false;
+                    attachStreamToAllPips();
+                })
+                .catch(err => {
+                    recoveringCamera = false;
+                    console.warn('Camera recovery attempt:', err);
+                });
+        }
+    } else {
+        attachStreamToAllPips();
+    }
+}
+
+function attachStreamToAllPips() {
+    if (!cameraStream || isSubmitting) return;
+
+    const pips = [
+        document.getElementById('examWebcamPip'),
+        document.getElementById('securityWarningWebcamPip')
+    ];
+
+    pips.forEach(pip => {
+        if (pip) {
+            pip.muted = true;
+            pip.defaultMuted = true;
+            if (pip.srcObject !== cameraStream) {
+                pip.srcObject = cameraStream;
+            }
+            pip.style.display = 'block';
+            const playPromise = pip.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(() => { });
+            }
+        }
+    });
+}
+
+// -------------------------------------------------------------
 // Anti-Cheat Security & Three-Strike Monitoring
 // -------------------------------------------------------------
+
+function getFullscreenElement() {
+    return document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement ||
+        null;
+}
+
+function handleFullscreenChange() {
+    // Unpause camera immediately on display mode change
+    keepCameraActive();
+    setTimeout(keepCameraActive, 100);
+    setTimeout(keepCameraActive, 300);
+
+    const fs = getFullscreenElement();
+    if (!fs) {
+        if (activeAttemptId && !isSubmitting && !isWarningModalOpen && !violationCooldown) {
+            triggerSecurityViolation('FULLSCREEN_EXIT', 'Fullscreen exit detected');
+        }
+    }
+}
+
+function handleWindowBlur() {
+    keepCameraActive();
+    // If fullscreen is simultaneously lost (e.g. user pressed ESC), prioritize FULLSCREEN_EXIT
+    if (!getFullscreenElement()) {
+        handleFullscreenChange();
+        return;
+    }
+
+    if (activeAttemptId && !isSubmitting && !isWarningModalOpen && !violationCooldown) {
+        triggerSecurityViolation('FOCUS_LOST', 'Window focus lost / tab switch detected');
+    }
+}
+
+function handleVisibilityChange() {
+    keepCameraActive();
+    if (document.hidden && activeAttemptId && !isSubmitting && !isWarningModalOpen && !violationCooldown) {
+        triggerSecurityViolation('TAB_SWITCH', 'Browser minimized or tab switch detected');
+    }
+}
+
+function handleBeforeUnload(e) {
+    if (activeAttemptId && !isSubmitting) {
+        e.preventDefault();
+        e.returnValue = 'You have an active exam in progress. Leaving this page may submit or terminate your attempt.';
+        return e.returnValue;
+    }
+}
 
 function attachSecurityWatchdogs() {
     if (watchdogsAttached) return;
     watchdogsAttached = true;
 
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden && activeAttemptId && !isSubmitting) {
-            triggerSecurityViolation('TAB_SWITCH', 'Tab switch or window minimized detected');
-        }
-    });
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', keepCameraActive);
 
-    window.addEventListener('blur', () => {
+    // Multi-browser vendor fullscreen events
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Bind proctor video elements
+    bindCameraEvents(document.getElementById('examWebcamPip'));
+    bindCameraEvents(document.getElementById('securityWarningWebcamPip'));
+
+    // Start 1-second camera heartbeat & continuous fullscreen watchdog
+    clearInterval(cameraHeartbeatInterval);
+    cameraHeartbeatInterval = setInterval(() => {
         if (activeAttemptId && !isSubmitting) {
-            triggerSecurityViolation('FOCUS_LOST', 'Window focus lost');
+            keepCameraActive();
+            // Continuous Fullscreen check: if fullscreen was exited and modal isn't open yet
+            if (!getFullscreenElement() && !isWarningModalOpen && !violationCooldown) {
+                triggerSecurityViolation('FULLSCREEN_EXIT', 'Fullscreen exit detected by integrity monitor');
+            }
         }
-    });
-
-    document.addEventListener('fullscreenchange', () => {
-        if (!document.fullscreenElement && activeAttemptId && !isSubmitting) {
-            triggerSecurityViolation('FULLSCREEN_EXIT', 'Fullscreen exit detected');
-        }
-    });
+    }, 1000);
 }
 
+function detachSecurityWatchdogs() {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.removeEventListener('blur', handleWindowBlur);
+    window.removeEventListener('focus', keepCameraActive);
+
+    document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    window.removeEventListener('beforeunload', handleBeforeUnload);
+
+    clearInterval(cameraHeartbeatInterval);
+    cameraHeartbeatInterval = null;
+    watchdogsAttached = false;
+    isWarningModalOpen = false;
+    violationCooldown = false;
+}
+
+// -------------------------------------------------------------
+// Submission Progress Overlay Helpers
+// -------------------------------------------------------------
+
+function showSubmissionStatusOverlay(title, desc, state, retryCallback) {
+    const overlay = document.getElementById('submissionStatusOverlay');
+    if (!overlay) return;
+    const titleEl = document.getElementById('submissionStatusTitle');
+    const descEl = document.getElementById('submissionStatusDesc');
+    const spinnerEl = document.getElementById('submissionStatusSpinner');
+    const iconEl = document.getElementById('submissionStatusIcon');
+    const retryCont = document.getElementById('submissionRetryContainer');
+
+    if (titleEl && title) titleEl.textContent = title;
+    if (descEl && desc) descEl.textContent = desc;
+
+    if (state === 'SUBMISSION_FAILED') {
+        if (spinnerEl) spinnerEl.style.display = 'none';
+        if (iconEl) {
+            iconEl.style.display = 'block';
+            iconEl.textContent = '⚠️';
+        }
+        if (retryCont) retryCont.style.display = 'block';
+        window._submissionRetryCallback = retryCallback;
+    } else {
+        if (spinnerEl) spinnerEl.style.display = 'block';
+        if (iconEl) iconEl.style.display = 'none';
+        if (retryCont) retryCont.style.display = 'none';
+    }
+
+    overlay.classList.add('active');
+    overlay.style.display = 'flex';
+}
+
+function updateSubmissionStatusMessage(desc) {
+    const descEl = document.getElementById('submissionStatusDesc');
+    if (descEl && desc) descEl.textContent = desc;
+}
+
+function hideSubmissionStatusOverlay() {
+    const overlay = document.getElementById('submissionStatusOverlay');
+    if (overlay) {
+        overlay.classList.remove('active');
+        overlay.style.display = 'none';
+    }
+}
+
+window.retrySubmitAssessment = function () {
+    isSubmitting = false;
+    submissionState = 'IN_PROGRESS';
+    window._activeSubmitRequest = false;
+    const submitBtn = document.getElementById('btnSubmitExam');
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '✓ Submit Test';
+    }
+    const confirmBtn = document.getElementById('btnFinalSubmitConfirm');
+    if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Yes, Finalize & Submit';
+    }
+    if (typeof window._submissionRetryCallback === 'function') {
+        window._submissionRetryCallback();
+    } else {
+        submitAssessmentTest(lastSubmissionReason || 'manual');
+    }
+};
+
+// -------------------------------------------------------------
+// Security Violations: 3-Strike Rule & Instant Finalization
+// -------------------------------------------------------------
+
 function triggerSecurityViolation(type, message) {
-    const now = Date.now();
-    if (now - lastViolationTime < 2500) return; // Debounce
-    lastViolationTime = now;
+    if (!activeAttemptId || isSubmitting || submissionState !== 'IN_PROGRESS') return;
+
+    // Deduplication check for warnings 1 and 2
+    if (violationCooldown && violationCount < 2) return;
 
     violationCount++;
+    updateViolationCounterDisplay();
+
+    // BUG 1 FIX: If third violation threshold is reached, IMMEDIATELY initiate automatic submission
+    if (violationCount >= 3) {
+        // Synchronous submission lock immediately set
+        submissionState = 'SUBMITTING';
+        isSubmitting = true;
+        violationCooldown = true;
+
+        // Immediately close any open warning modals
+        const warnModal = document.getElementById('securityWarningModal');
+        if (warnModal) warnModal.classList.remove('active');
+        isWarningModalOpen = false;
+
+        // Immediately stop test timer and unbind security listeners so no further events fire
+        clearInterval(timerInterval);
+        detachSecurityWatchdogs();
+
+        // Log proctoring event to server (non-blocking)
+        if (activeAttemptId) {
+            fetch(`${window.CONTEXT_PATH}/api/test-attempts/${activeAttemptId}/log-event`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: type, message: message, count: violationCount })
+            }).catch(() => { });
+        }
+
+        // Show non-dismissible submission overlay
+        showSubmissionStatusOverlay(
+            'Security Violation Limit Reached (3/3)',
+            'Maximum integrity violations reached (3/3). Auto-submitting and grading exam...',
+            'SUBMITTING'
+        );
+
+        // Immediately execute submission without requiring any student clicks or modal acknowledgement
+        submitAssessmentTest('proctor_violation');
+        return;
+    }
+
+    // Otherwise, handle violation 1 or 2:
+    violationCooldown = true;
+    setTimeout(() => {
+        violationCooldown = false;
+    }, 2500);
 
     if (activeAttemptId) {
         fetch(`${window.CONTEXT_PATH}/api/test-attempts/${activeAttemptId}/log-event`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: type, message: message })
-        }).catch(() => {});
+            body: JSON.stringify({ type: type, message: message, count: violationCount })
+        }).then(res => res.json()).then(data => {
+            if (data && (data.mustAutoSubmit || data.violationCount >= 3) && submissionState === 'IN_PROGRESS') {
+                // Server confirmed violation limit reached
+                violationCount = Math.max(violationCount, data.violationCount || 3);
+                submissionState = 'SUBMITTING';
+                isSubmitting = true;
+                clearInterval(timerInterval);
+                detachSecurityWatchdogs();
+                showSubmissionStatusOverlay('Security Violation Limit Reached (3/3)', 'Server verified violation threshold reached. Auto-submitting exam...', 'SUBMITTING');
+                submitAssessmentTest('proctor_violation');
+            }
+        }).catch(() => { });
     }
 
-    if (violationCount >= 3) {
-        submitAssessmentTest('proctor_violation');
-    } else {
-        showSecurityWarningModal();
-    }
+    showSecurityWarningModal(type);
 }
 
-function showSecurityWarningModal() {
+function showSecurityWarningModal(type) {
+    if (violationCount >= 3) return; // Handled immediately in triggerSecurityViolation
     const modal = document.getElementById('securityWarningModal');
     if (!modal) return;
 
-    const title = document.getElementById('securityModalTitle');
-    if (title) title.textContent = `Security Warning ${violationCount}/3`;
+    isWarningModalOpen = true;
 
-    const rem = document.getElementById('violationsRemainingCount');
-    if (rem) rem.textContent = (3 - violationCount);
+    // Wake and attach camera in security warning preview immediately
+    keepCameraActive();
+    setTimeout(keepCameraActive, 50);
+
+    const titleEl = document.getElementById('securityModalTitle');
+    const subtitleEl = document.getElementById('securityModalSubtitle');
+    const msgEl = document.getElementById('securityModalMessage');
+    const noticeEl = document.getElementById('securityNextStepNotice');
+    const ackBtn = document.getElementById('btnAcknowledgeSecurity');
+    const currCountEl = document.getElementById('securityModalCurrentCount');
+    const remCountEl = document.getElementById('violationsRemainingCount');
+
+    if (currCountEl) currCountEl.textContent = violationCount;
+    if (remCountEl) remCountEl.textContent = Math.max(0, 3 - violationCount);
+
+    if (violationCount === 1) {
+        if (titleEl) titleEl.textContent = 'Security Warning (1/3)';
+        if (subtitleEl) subtitleEl.textContent = 'Integrity Violation Detected';
+        if (msgEl) {
+            msgEl.textContent = 'Warning 1/3: You have left fullscreen mode or switched away from the exam. Return to fullscreen immediately. Further violations will terminate your exam.';
+        }
+        if (noticeEl) {
+            noticeEl.innerHTML = 'Violations remaining before exam penalty/termination: <strong style="color: #dc2626;">2</strong>';
+        }
+        if (ackBtn) {
+            ackBtn.textContent = 'Return to Fullscreen & Continue Assessment →';
+            ackBtn.style.background = '#dc2626';
+        }
+    } else if (violationCount === 2) {
+        if (titleEl) titleEl.textContent = 'Security Warning (2/3)';
+        if (subtitleEl) subtitleEl.textContent = 'Final Warning Before Exam Termination';
+        if (msgEl) {
+            msgEl.textContent = 'Warning 2/3: This is your final warning. You must remain in fullscreen mode. 1 more violation will immediately submit and terminate your assessment!';
+        }
+        if (noticeEl) {
+            noticeEl.innerHTML = '<strong style="color: #dc2626; font-size: 0.9rem;">CRITICAL: 1 more violation will immediately terminate your assessment!</strong>';
+        }
+        if (ackBtn) {
+            ackBtn.textContent = 'Return to Fullscreen & Continue Assessment →';
+            ackBtn.style.background = '#b91c1c';
+        }
+    }
 
     modal.classList.add('active');
 }
@@ -791,43 +1193,169 @@ function showSecurityWarningModal() {
 async function acknowledgeWarningAndReturnFullscreen() {
     const modal = document.getElementById('securityWarningModal');
     if (modal) modal.classList.remove('active');
+    isWarningModalOpen = false;
+
+    if (violationCount >= 3) {
+        if (!isSubmitting) {
+            submitAssessmentTest('proctor_violation');
+        }
+        return;
+    }
 
     try {
-        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-            await document.documentElement.requestFullscreen();
+        const doc = document.documentElement;
+        if (!getFullscreenElement()) {
+            if (doc.requestFullscreen) {
+                await doc.requestFullscreen();
+            } else if (doc.webkitRequestFullscreen) {
+                doc.webkitRequestFullscreen();
+            } else if (doc.msRequestFullscreen) {
+                doc.msRequestFullscreen();
+            }
         }
-    } catch (e) {}
+    } catch (e) {
+        console.warn('Fullscreen reentry notice:', e);
+    }
+
+    keepCameraActive();
+    setTimeout(keepCameraActive, 100);
 }
 
 // -------------------------------------------------------------
-// Submit Assessment & Results Display
+// Submit Assessment & Results Display (Fast & Idempotent)
 // -------------------------------------------------------------
 
 function confirmAndSubmitExam() {
+    if (submissionState === 'SUBMITTED') return;
+    if (isSubmitting && window._activeSubmitRequest) return;
+
+    // Reset submission flags to allow user review or retry
+    isSubmitting = false;
+    submissionState = 'IN_PROGRESS';
+
+    const confirmBtn = document.getElementById('btnFinalSubmitConfirm');
+    if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Yes, Finalize & Submit';
+    }
+    const submitBtn = document.getElementById('btnSubmitExam');
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '✓ Submit Test';
+    }
+
     const total = currentQuestions.length;
     const answered = Object.keys(userAnswers).length;
-    const unanswered = total - answered;
+    const unanswered = Math.max(0, total - answered);
+    const marked = markedForReview.size;
 
-    const msg = `Are you sure you want to submit your test?\n\n• Answered: ${answered} / ${total}\n• Unanswered: ${unanswered}\n\nOnce submitted, answers cannot be modified.`;
-    if (confirm(msg)) {
-        submitAssessmentTest('manual');
+    const answeredEl = document.getElementById('confirmAnsweredCount');
+    if (answeredEl) answeredEl.textContent = answered;
+    const unansweredEl = document.getElementById('confirmUnansweredCount');
+    if (unansweredEl) unansweredEl.textContent = unanswered;
+    const markedEl = document.getElementById('confirmMarkedCount');
+    if (markedEl) markedEl.textContent = marked;
+
+    const modal = document.getElementById('examSubmitConfirmModal');
+    if (modal) {
+        modal.classList.add('active');
+    } else {
+        const msg = `Are you sure you want to submit your test?\n\n• Answered: ${answered} / ${total}\n• Unanswered: ${unanswered}\n\nOnce submitted, answers cannot be modified.`;
+        if (confirm(msg)) {
+            submitAssessmentTest('student_submitted');
+        }
     }
 }
 
-async function submitAssessmentTest(reason = 'manual') {
-    if (isSubmitting) return;
-    isSubmitting = true;
-    clearInterval(timerInterval);
+function closeSubmitConfirmModal() {
+    const modal = document.getElementById('examSubmitConfirmModal');
+    if (modal) modal.classList.remove('active');
 
-    // Close any open modals
+    const confirmBtn = document.getElementById('btnFinalSubmitConfirm');
+    if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Yes, Finalize & Submit';
+    }
+    const submitBtn = document.getElementById('btnSubmitExam');
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '✓ Submit Test';
+    }
+}
+
+function executeFinalSubmit(reason) {
+    const confirmBtn = document.getElementById('btnFinalSubmitConfirm');
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Finalizing...';
+    }
+    closeSubmitConfirmModal();
+    submitAssessmentTest(reason || 'student_submitted');
+}
+
+async function submitAssessmentTest(reason = 'manual') {
+    if (submissionState === 'SUBMITTED') return;
+    if (isSubmitting && submissionState === 'SUBMITTING' && window._activeSubmitRequest) {
+        return; // Prevent duplicate concurrent requests
+    }
+
+    lastSubmissionReason = reason;
+    submissionState = 'SUBMITTING';
+    isSubmitting = true;
+
+    // Resilient attempt resolution: recover from active session if activeAttemptId was lost
+    let submittedAttemptId = activeAttemptId;
+    if (!submittedAttemptId) {
+        try {
+            const sessRes = await fetch(`${window.CONTEXT_PATH}/api/tests/active-session`);
+            const sessData = await sessRes.json();
+            if (sessData && sessData.hasActiveSession && sessData.attemptId) {
+                submittedAttemptId = sessData.attemptId;
+                activeAttemptId = submittedAttemptId;
+            }
+        } catch (e) {
+            console.warn('Could not recover active session ID:', e);
+        }
+    }
+
+    if (!submittedAttemptId) {
+        console.warn('No active attempt ID found to submit.');
+        isSubmitting = false;
+        submissionState = 'IN_PROGRESS';
+        hideSubmissionStatusOverlay();
+        const submitBtn = document.getElementById('btnSubmitExam');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = '✓ Submit Test';
+        }
+        const confirmBtn = document.getElementById('btnFinalSubmitConfirm');
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Yes, Finalize & Submit';
+        }
+        alert('No active exam session was found. Please ensure you have started a test series.');
+        return;
+    }
+
+    clearInterval(timerInterval);
+    detachSecurityWatchdogs();
+
+    // Close any other open modals
     const warnModal = document.getElementById('securityWarningModal');
     if (warnModal) warnModal.classList.remove('active');
+    const confirmModal = document.getElementById('examSubmitConfirmModal');
+    if (confirmModal) confirmModal.classList.remove('active');
 
-    // Exit fullscreen
-    if (document.fullscreenElement && document.exitFullscreen) {
-        try { await document.exitFullscreen(); } catch (e) {}
-    }
+    // Exit fullscreen safely
+    try {
+        if (document.fullscreenElement && document.exitFullscreen) {
+            await document.exitFullscreen();
+        }
+    } catch (e) { }
+
     window.stopProctorWebcam();
+    document.body.classList.remove('in-exam-mode');
+    document.documentElement.classList.remove('in-exam-mode');
 
     const submitBtn = document.getElementById('btnSubmitExam');
     if (submitBtn) {
@@ -835,40 +1363,120 @@ async function submitAssessmentTest(reason = 'manual') {
         submitBtn.textContent = 'Submitting & Grading...';
     }
 
-    try {
-        const payload = {
-            answers: userAnswers,
-            submissionReason: reason
-        };
+    // Display status overlay
+    const overlayTitle = (reason === 'proctor_violation') ? 'Security Violation Limit Reached (3/3)' :
+        (reason === 'timeout' ? 'Time Expired — Finalizing Exam' : 'Submitting Your Exam');
+    showSubmissionStatusOverlay(overlayTitle, 'Submitting your exam...', 'SUBMITTING');
 
-        const res = await fetch(`${window.CONTEXT_PATH}/api/test-attempts/${activeAttemptId}/submit`, {
+    // Bounded await for any pending autosave (max 300ms) to ensure no answer is lost
+    if (pendingAutosavePromise) {
+        try {
+            await Promise.race([
+                pendingAutosavePromise,
+                new Promise(resolve => setTimeout(resolve, 300))
+            ]);
+        } catch (e) { }
+    }
+
+    updateSubmissionStatusMessage('Finalizing your result...');
+
+    const payload = {
+        answers: userAnswers,
+        submissionReason: reason
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+    try {
+        window._activeSubmitRequest = true;
+        const res = await fetch(`${window.CONTEXT_PATH}/api/test-attempts/${submittedAttemptId}/submit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
+            signal: controller.signal
         });
+        clearTimeout(timeoutId);
+        window._activeSubmitRequest = false;
 
-        const data = await res.json();
-        if (data.success) {
-            renderAssessmentResult(data);
+        let data = null;
+        try {
+            data = await res.json();
+        } catch (parseErr) {
+            console.warn('Non-JSON response received from primary submit endpoint:', parseErr);
+        }
+
+        if (data && data.success) {
+            submissionState = 'SUBMITTED';
+            isSubmitting = false;
+            updateSubmissionStatusMessage('Submission confirmed. Opening your result...');
+            activeAttemptId = null;
+            const targetAttemptId = data.attemptId || data.id || submittedAttemptId;
+            setTimeout(() => {
+                window.location.href = `${window.CONTEXT_PATH}/test-result?attemptId=${encodeURIComponent(targetAttemptId)}`;
+            }, 300);
+            return;
         } else {
-            console.warn('Endpoint /api/test-attempts/.../submit failed, trying fallback /api/tests/submit...', data);
-            await fallbackSubmitExam(reason);
+            console.warn('Primary submission returned non-success, checking fallback...', data);
+            await fallbackSubmitExam(submittedAttemptId, reason);
         }
     } catch (err) {
-        console.warn('Network error on primary submit, trying fallback /api/tests/submit...', err);
+        clearTimeout(timeoutId);
+        window._activeSubmitRequest = false;
+        console.warn('Network or timeout on primary submit, verifying status...', err);
+
+        // Check if server already finalized attempt (Idempotency check)
+        updateSubmissionStatusMessage('Submission is taking longer than expected. Checking your saved result...');
         try {
-            await fallbackSubmitExam(reason);
+            const statusCheck = await fetch(`${window.CONTEXT_PATH}/api/test-attempts/${submittedAttemptId}/status`);
+            const statusData = await statusCheck.json();
+            if (statusData && statusData.success && (statusData.status === 'submitted' || statusData.status === 'terminated' || statusData.status === 'auto_submitted')) {
+                submissionState = 'SUBMITTED';
+                isSubmitting = false;
+                updateSubmissionStatusMessage('Submission confirmed. Opening your result...');
+                activeAttemptId = null;
+                setTimeout(() => {
+                    window.location.href = `${window.CONTEXT_PATH}/test-result?attemptId=${encodeURIComponent(submittedAttemptId)}`;
+                }, 300);
+                return;
+            }
+        } catch (checkErr) { }
+
+        // Fallback endpoint retry
+        try {
+            await fallbackSubmitExam(submittedAttemptId, reason);
         } catch (fbErr) {
-            alert('Network error submitting test. Your answers have been preserved.');
+            submissionState = 'SUBMISSION_FAILED';
+            isSubmitting = false;
+            window._activeSubmitRequest = false;
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '✓ Submit Test';
+            }
+            const confirmBtn = document.getElementById('btnFinalSubmitConfirm');
+            if (confirmBtn) {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Yes, Finalize & Submit';
+            }
+            showSubmissionStatusOverlay(
+                'Submission Could Not Be Confirmed',
+                'Your answers have been safely preserved. Please check your internet connection and click below to retry safely.',
+                'SUBMISSION_FAILED',
+                () => {
+                    isSubmitting = false;
+                    submissionState = 'IN_PROGRESS';
+                    submitAssessmentTest(reason);
+                }
+            );
         }
     } finally {
-        isSubmitting = false;
+        window._activeSubmitRequest = false;
     }
 }
 
-async function fallbackSubmitExam(reason = 'manual') {
+async function fallbackSubmitExam(attemptId, reason = 'manual') {
     const payload = {
-        attemptId: activeAttemptId,
+        attemptId: attemptId,
         answers: userAnswers,
         submissionReason: reason
     };
@@ -879,11 +1487,24 @@ async function fallbackSubmitExam(reason = 'manual') {
         body: JSON.stringify(payload)
     });
 
-    const data = await res.json();
-    if (data.success) {
-        renderAssessmentResult(data);
+    let data = null;
+    try {
+        data = await res.json();
+    } catch (fbParseErr) {
+        console.warn('Non-JSON response from fallback submit endpoint:', fbParseErr);
+    }
+
+    if (data && data.success) {
+        submissionState = 'SUBMITTED';
+        isSubmitting = false;
+        updateSubmissionStatusMessage('Submission confirmed. Opening your result...');
+        activeAttemptId = null;
+        const targetAttemptId = data.attemptId || data.id || attemptId;
+        setTimeout(() => {
+            window.location.href = `${window.CONTEXT_PATH}/test-result?attemptId=${encodeURIComponent(targetAttemptId)}`;
+        }, 300);
     } else {
-        alert('Submission error: ' + (data.message || data.error || 'Server error while grading test'));
+        throw new Error((data && (data.error || data.message)) || 'Fallback submission failed');
     }
 }
 
@@ -1044,26 +1665,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         const res = await fetch(`${window.CONTEXT_PATH}/api/tests/active-session`);
         const data = await res.json();
-        if (data && data.hasActiveSession && data.questions) {
+        if (data && data.hasActiveSession && data.questions && data.questions.length > 0) {
             activeAttemptId = data.attemptId;
             currentQuestions = data.questions;
             currentIndex = 0;
             userAnswers = data.savedAnswers || {};
             violationCount = data.violationCount || 0;
-            remainingSeconds = data.remainingSeconds;
+            remainingSeconds = data.remainingSeconds || 1800;
+
+            updateViolationCounterDisplay();
 
             const modal = document.getElementById('sessionResumeModal');
             if (modal) {
-                document.getElementById('resumeCategory').textContent = data.category + (data.topic ? ` (${data.topic})` : '');
-                const mins = Math.floor(remainingSeconds / 60);
-                const secs = remainingSeconds % 60;
-                document.getElementById('resumeTimeRemaining').textContent = `${mins}m ${secs}s`;
-                document.getElementById('resumeViolationCount').textContent = `${violationCount} / 3`;
+                const catEl = document.getElementById('resumeCategory');
+                if (catEl) catEl.textContent = (data.category || 'Placement Assessment') + (data.topic ? ` (${data.topic})` : '');
+                const mins = Math.floor(Math.max(0, remainingSeconds) / 60);
+                const secs = Math.max(0, remainingSeconds) % 60;
+                const timeEl = document.getElementById('resumeTimeRemaining');
+                if (timeEl) timeEl.textContent = `${mins}m ${secs}s`;
+                const violEl = document.getElementById('resumeViolationCount');
+                if (violEl) violEl.textContent = `${violationCount} / 3`;
                 modal.classList.add('active');
             }
+        } else {
+            // Explicitly ensure resume modal is hidden when no active attempt exists
+            const modal = document.getElementById('sessionResumeModal');
+            if (modal) modal.classList.remove('active');
+            activeAttemptId = null;
         }
-    } catch (e) {}
+    } catch (e) {
+        console.warn('Error verifying active session:', e);
+    }
 });
+
+function dismissResumeModal() {
+    const modal = document.getElementById('sessionResumeModal');
+    if (modal) modal.classList.remove('active');
+    activeAttemptId = null;
+}
 
 async function resumeActiveExamInFullscreen() {
     const modal = document.getElementById('sessionResumeModal');
@@ -1073,14 +1712,37 @@ async function resumeActiveExamInFullscreen() {
         if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
             await document.documentElement.requestFullscreen();
         }
-    } catch (e) {}
+    } catch (e) {
+        console.warn('Fullscreen resume notice:', e);
+    }
 
     switchToExamRunnerView(selectedCategory, selectedTitle, selectedDifficulty);
+    updateViolationCounterDisplay();
     startTimerCountdown();
     attachSecurityWatchdogs();
     renderQuestionPalette();
     renderCurrentQuestion();
 }
+
+window.confirmAndSubmitExam = confirmAndSubmitExam;
+window.closeSubmitConfirmModal = closeSubmitConfirmModal;
+window.executeFinalSubmit = executeFinalSubmit;
+window.dismissResumeModal = dismissResumeModal;
+window.resumeActiveExamInFullscreen = resumeActiveExamInFullscreen;
+window.acknowledgeWarningAndReturnFullscreen = acknowledgeWarningAndReturnFullscreen;
+window.prevQuestion = prevQuestion;
+window.nextQuestion = nextQuestion;
+window.selectOption = selectOption;
+window.clearCurrentResponse = clearCurrentResponse;
+window.toggleMarkForReview = toggleMarkForReview;
+window.navigateToQuestion = navigateToQuestion;
+window.startExamInFullscreen = startExamInFullscreen;
+window.initiateExamSetup = initiateExamSetup;
+window.cancelExamSetup = cancelExamSetup;
+window.selectDifficulty = selectDifficulty;
+window.requestWebcamVerification = requestWebcamVerification;
+window.handleConsentChange = handleConsentChange;
+window.retakeCurrentAssessment = retakeCurrentAssessment;
 
 function escapeHtml(text) {
     if (!text) return '';

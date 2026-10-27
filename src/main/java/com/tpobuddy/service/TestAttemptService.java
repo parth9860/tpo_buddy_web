@@ -2,13 +2,17 @@ package com.tpobuddy.service;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.tpobuddy.controller.TestController;
 import com.tpobuddy.model.*;
 import com.tpobuddy.util.Config;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -75,9 +79,7 @@ public class TestAttemptService {
         String existingAttemptId = studentActiveAttempt.get(studentUid);
         if (existingAttemptId != null) {
             TestAttempt existing = attemptRegistry.get(existingAttemptId);
-            if (existing != null && !"submitted".equalsIgnoreCase(existing.getStatus())
-                    && !"auto_submitted_security".equalsIgnoreCase(existing.getStatus())
-                    && !"auto_submitted_timeout".equalsIgnoreCase(existing.getStatus())) {
+            if (existing != null && !isSubmitted(existing)) {
                 long now = System.currentTimeMillis();
                 if (existing.getDeadline() > 0 && now < existing.getDeadline()) {
                     // Active valid attempt exists; return idempotently only if series and difficulty match
@@ -115,8 +117,47 @@ public class TestAttemptService {
         attemptRegistry.put(attemptId, attempt);
         studentActiveAttempt.put(studentUid, attemptId);
 
-        // Step 3 & 4: Generate 50 candidates & validate
-        List<Question> candidatePool = aiGenerationService.generateCandidatePool(series, effDifficulty, customTopics, 50);
+        String effTopic = (customTopics != null && !customTopics.isEmpty()) ? String.join(", ", customTopics) : (series != null ? series.getSubject() : "Placement Practice");
+        String qSetId = "qs_" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        List<Question> candidatePool = new ArrayList<>();
+
+        // 1. Check Firebase for an existing valid question set matching exact series, topic and difficulty
+        JsonObject existingSet = firebaseService.fetchReusableSnjbQuestionSet(seriesId, effTopic, effDifficulty);
+        if (existingSet != null && existingSet.has("questions") && existingSet.get("questions").isJsonArray()) {
+            JsonArray qArr = existingSet.getAsJsonArray("questions");
+            if (qArr.size() >= 30) {
+                for (JsonElement qEl : qArr) {
+                    if (qEl.isJsonObject()) {
+                        candidatePool.add(gson.fromJson(qEl, Question.class));
+                    }
+                }
+            }
+        }
+
+        // 2. If no suitable question set exists, dynamically generate with Gemini AI
+        if (candidatePool.size() < 30) {
+            candidatePool = aiGenerationService.generateCandidatePool(series, effDifficulty, customTopics, 50);
+
+            // Persist the new validated question set into Firebase snjbQuestionSets for subsequent reuse
+            if (!candidatePool.isEmpty()) {
+                JsonObject setJson = new JsonObject();
+                setJson.addProperty("setId", qSetId);
+                setJson.addProperty("seriesId", series != null ? series.getSeriesId() : seriesId);
+                setJson.addProperty("topic", effTopic);
+                setJson.addProperty("difficulty", effDifficulty);
+                setJson.addProperty("questionCount", candidatePool.size());
+                setJson.addProperty("createdAt", now);
+                setJson.addProperty("expiresAt", now + (24 * 3600 * 1000L)); // 24h validity
+                setJson.addProperty("status", "ACTIVE");
+                setJson.addProperty("model", "gemini-2.5-flash");
+                setJson.add("questions", gson.toJsonTree(candidatePool));
+                try {
+                    firebaseService.saveSnjbQuestionSet(qSetId, setJson);
+                } catch (Exception e) {
+                    System.err.println("Notice: could not persist question set to Firebase: " + e.getMessage());
+                }
+            }
+        }
 
         // Step 5: Select exactly 30 questions
         List<Question> selected30 = questionSelectionService.selectQuestionsForAttempt(candidatePool, series, effDifficulty);
@@ -178,12 +219,68 @@ public class TestAttemptService {
         return arr;
     }
 
+    public List<Question> getAttemptQuestions(String attemptId) {
+        return protectedQuestions.get(attemptId);
+    }
+
     public TestAttempt getAttempt(String attemptId, String studentUid) {
+        if (attemptId == null) return null;
         TestAttempt attempt = attemptRegistry.get(attemptId);
-        if (attempt != null && attempt.getUserId().equals(studentUid)) {
+        if (attempt != null && (attempt.getUserId() == null || studentUid == null || attempt.getUserId().equals(studentUid))) {
             return attempt;
         }
+        if (cachedResults.containsKey(attemptId)) {
+            TestEvaluationService.EvaluationPayload payload = cachedResults.get(attemptId);
+            if (payload != null && payload.attempt != null) {
+                TestAttempt att = payload.attempt;
+                if (att.getUserId() == null || studentUid == null || att.getUserId().equals(studentUid)) {
+                    return att;
+                }
+            }
+        }
         return null;
+    }
+
+    public synchronized TestAttempt getActiveAttemptForStudent(String studentUid) {
+        if (studentUid == null || studentUid.trim().isEmpty()) return null;
+        String attemptId = studentActiveAttempt.get(studentUid);
+        if (attemptId == null) return null;
+
+        TestAttempt attempt = attemptRegistry.get(attemptId);
+        if (attempt == null) {
+            studentActiveAttempt.remove(studentUid);
+            return null;
+        }
+
+        if (isSubmitted(attempt)) {
+            studentActiveAttempt.remove(studentUid);
+            return null;
+        }
+
+        long now = System.currentTimeMillis();
+        if (attempt.getDeadline() > 0 && now > attempt.getDeadline()) {
+            // Auto submit expired attempt
+            Map<Integer, Integer> saved = new HashMap<>();
+            if (attempt.getSavedAnswersJson() != null && !attempt.getSavedAnswersJson().isEmpty()) {
+                try {
+                    JsonObject ansObj = JsonParser.parseString(attempt.getSavedAnswersJson()).getAsJsonObject();
+                    for (Map.Entry<String, JsonElement> e : ansObj.entrySet()) {
+                        saved.put(Integer.parseInt(e.getKey()), e.getValue().getAsInt());
+                    }
+                } catch (Exception ignored) {}
+            }
+            submitAttempt(attemptId, studentUid, saved, "timeout");
+            studentActiveAttempt.remove(studentUid);
+            return null;
+        }
+
+        return attempt;
+    }
+
+    public synchronized void clearStudentActiveAttempt(String studentUid) {
+        if (studentUid != null) {
+            studentActiveAttempt.remove(studentUid);
+        }
     }
 
     public synchronized boolean saveProgress(String attemptId, String studentUid, Map<Integer, Integer> answers) {
@@ -216,6 +313,11 @@ public class TestAttemptService {
             }
         }
 
+        // Persist event to Firebase snjbSecurityEvents node
+        try {
+            firebaseService.saveSnjbSecurityEvent(attemptId, event);
+        } catch (Exception ignored) {}
+
         resp.addProperty("success", true);
         resp.addProperty("violationCount", attempt.getViolationCount());
         resp.addProperty("mustAutoSubmit", attempt.getViolationCount() >= 3);
@@ -223,17 +325,38 @@ public class TestAttemptService {
     }
 
     /**
-     * Authoritative submission and scoring of the test attempt.
+     * Authoritative submission and scoring of the test attempt (Centralized & Idempotent).
      */
     public synchronized TestEvaluationService.EvaluationPayload submitAttempt(String attemptId, String studentUid,
                                                                               Map<Integer, Integer> finalAnswers,
                                                                               String reason) {
+        long tStart = System.currentTimeMillis();
+        System.out.printf("[SUBMISSION-START] Attempt: %s | Student: %s | Reason: %s%n", attemptId, studentUid, reason);
+
         // Check if already evaluated and cached (Idempotency)
-        if (cachedResults.containsKey(attemptId)) {
+        if (attemptId != null && cachedResults.containsKey(attemptId)) {
+            System.out.printf("[IDEMPOTENT-SUBMISSION] Attempt %s already finalized, returning cached result.%n", attemptId);
             return cachedResults.get(attemptId);
         }
 
-        TestAttempt attempt = attemptRegistry.get(attemptId);
+        TestAttempt attempt = (attemptId != null) ? attemptRegistry.get(attemptId) : null;
+
+        // Security check: Verify that student owns the attempt
+        if (attempt != null && attempt.getUserId() != null && studentUid != null && !attempt.getUserId().equals(studentUid)) {
+            System.err.printf("[SECURITY-VIOLATION] Attempt %s belongs to %s, unauthorized submit by %s%n",
+                    attemptId, attempt.getUserId(), studentUid);
+            throw new SecurityException("Unauthorized: Attempt does not belong to user " + studentUid);
+        }
+
+        // Idempotency: Return existing evaluation if attempt is already completed
+        if (attempt != null && isSubmitted(attempt)) {
+            TestEvaluationService.EvaluationPayload cached = cachedResults.get(attemptId);
+            if (cached != null) {
+                System.out.printf("[IDEMPOTENT-SUBMISSION] Attempt %s status is %s, returning cached evaluation.%n", attemptId, attempt.getStatus());
+                return cached;
+            }
+        }
+
         if (attempt == null) {
             // Reconstruct attempt from active session or fallback parameters
             attempt = new TestAttempt();
@@ -250,6 +373,8 @@ public class TestAttemptService {
             attempt.setSelectedQuestionCount(30);
             attemptRegistry.put(attempt.getId(), attempt);
         }
+
+        long tState = System.currentTimeMillis();
 
         List<Question> questions = protectedQuestions.get(attemptId);
         if (questions == null || questions.isEmpty()) {
@@ -275,14 +400,14 @@ public class TestAttemptService {
         String explicitReason = (reason != null && !reason.trim().isEmpty()) ? reason : "manual";
         String status = "submitted";
 
-        if ("automatic-security-submission".equalsIgnoreCase(explicitReason) || attempt.getViolationCount() >= 3) {
-            status = "auto_submitted_security";
+        if ("proctor_violation".equalsIgnoreCase(explicitReason) || "automatic-security-submission".equalsIgnoreCase(explicitReason) || attempt.getViolationCount() >= 3) {
+            status = "terminated";
         } else if ("timeout".equalsIgnoreCase(explicitReason) || (attempt.getDeadline() > 0 && now > attempt.getDeadline() + 10000)) {
-            status = "auto_submitted_timeout";
+            status = "auto_submitted";
         }
 
         int riskScore = Math.min(100, (attempt.getFocusLostCount() * 15) + (attempt.getFullscreenExitCount() * 25));
-        if ("auto_submitted_security".equals(status)) riskScore = 100;
+        if ("terminated".equals(status) || "auto_submitted_security".equals(status)) riskScore = 100;
         String riskLevel = (riskScore <= 15) ? "LOW" : (riskScore <= 40 ? "MODERATE" : "HIGH");
         String proctoringStatus = (riskScore > 40) ? "FLAGGED" : "VALIDATED";
 
@@ -306,56 +431,82 @@ public class TestAttemptService {
         attempt.setMaxMarks(result.getTotalMarks());
         attempt.setAccuracyPercentage(result.getAccuracy());
         attempt.setPassed(result.isPassed());
+        attempt.setTimeTakenSeconds(result.getTimeTakenSeconds());
+        attempt.setSavedAt(now);
         attempt.setSectionBreakdownJson(result.getSectionBreakdownJson());
         attempt.setWeakTopicsJson(gson.toJson(result.getWeakTopics()));
         attempt.setRecommendedPractice(gson.toJson(result.getRecommendedRevisionTopics()));
+        attempt.setQuestionReviewsJson(payload.questionReviews.toString());
+        result.setQuestionReviewsJson(payload.questionReviews.toString());
 
-        // Cache the evaluation payload
-        cachedResults.put(attemptId, payload);
+        long tGraded = System.currentTimeMillis();
 
-        // Persist attempt & result to Firebase
-        try {
-            firebaseService.saveTestAttempt(studentUid, attempt);
-            persistTestResult(result);
-        } catch (Exception e) {
-            System.err.println("Firebase result persistence note: " + e.getMessage());
+        // Cache the evaluation payload for instant retrieval
+        payload.attempt = attempt;
+        cachedResults.put(attempt.getId(), payload);
+        attemptRegistry.put(attempt.getId(), attempt);
+        if (attemptId != null && !attemptId.equals(attempt.getId())) {
+            cachedResults.put(attemptId, payload);
+            attemptRegistry.put(attemptId, attempt);
         }
+
+        // Persist attempt & result to Firebase (fast primary RTDB writes with async secondary mirrors)
+        final TestAttempt finalAttempt = attempt;
+        CompletableFuture<Boolean> attemptSaveFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                return firebaseService.saveTestAttempt(studentUid, finalAttempt);
+            } catch (Exception e) {
+                return false;
+            }
+        });
+
+        // Run secondary mirrors asynchronously
+        CompletableFuture.runAsync(() -> {
+            try {
+                firebaseService.saveSnjbTestResult(result);
+                persistTestResult(result);
+            } catch (Exception ignored) {}
+        });
+
+        // Synchronously wait for primary attempt save up to 1500ms; proceed without blocking if network is slow
+        try {
+            attemptSaveFuture.get(1500, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (Exception ignored) {}
+
+        long tPersist = System.currentTimeMillis();
 
         // Clear active pointer for student so they can take new tests
         studentActiveAttempt.remove(studentUid);
+        TestController.clearActiveSession(studentUid);
+
+        System.out.printf("[SUBMISSION-CONFIRMED] Attempt: %s | Student: %s | StateCheck: %dms | Grading: %dms | Persistence: %dms | Total: %dms | Status: %s | Score: %d%%%n",
+                attempt.getId(), studentUid, (tState - tStart), (tGraded - tState), (tPersist - tGraded), (tPersist - tStart), status, attempt.getScore());
 
         return payload;
+    }
+
+    public synchronized TestEvaluationService.EvaluationPayload submitExam(String attemptId, String studentUid,
+                                                                           Map<Integer, Integer> finalAnswers,
+                                                                           String reason) {
+        return submitAttempt(attemptId, studentUid, finalAnswers, reason);
     }
 
     private void persistTestResult(TestResult result) {
         if (result == null || result.getStudentUid() == null) return;
         try {
-            JsonObject obj = new JsonObject();
-            obj.addProperty("resultId", result.getResultId());
-            obj.addProperty("attemptId", result.getAttemptId());
-            obj.addProperty("studentUid", result.getStudentUid());
-            obj.addProperty("studentName", result.getStudentName());
-            obj.addProperty("category", result.getCategory());
-            obj.addProperty("seriesId", result.getSeriesId());
-            obj.addProperty("seriesName", result.getSeriesName());
-            obj.addProperty("subject", result.getSubject());
-            obj.addProperty("difficulty", result.getDifficulty());
-            obj.addProperty("score", result.getScore());
-            obj.addProperty("accuracy", result.getAccuracy());
-            obj.addProperty("correctCount", result.getCorrectCount());
-            obj.addProperty("incorrectCount", result.getIncorrectCount());
-            obj.addProperty("unansweredCount", result.getUnansweredCount());
-            obj.addProperty("totalQuestions", result.getTotalQuestions());
-            obj.addProperty("passed", result.isPassed());
-            obj.addProperty("sectionBreakdownJson", result.getSectionBreakdownJson());
-            obj.addProperty("topicWisePerformanceJson", result.getTopicWisePerformanceJson());
-            obj.addProperty("weakTopicsJson", gson.toJson(result.getWeakTopics()));
-            obj.addProperty("completedAt", result.getCompletedAt());
-
+            JsonObject obj = firebaseService.serializeTestResult(result);
             String userResultUrl = Config.getFirebaseDatabaseUrl() + "/test_results/" + result.getStudentUid() + "/" + result.getResultId() + ".json";
             String globalResultUrl = Config.getFirebaseDatabaseUrl() + "/all_test_results/" + result.getResultId() + ".json";
+
+            // Primary user result write
             firebaseService.executeHttpRequest(userResultUrl, "PUT", obj.toString());
-            firebaseService.executeHttpRequest(globalResultUrl, "PUT", obj.toString());
+
+            // Global result write asynchronously
+            CompletableFuture.runAsync(() -> {
+                try {
+                    firebaseService.executeHttpRequest(globalResultUrl, "PUT", obj.toString());
+                } catch (Exception ignored) {}
+            });
         } catch (Exception ignored) {}
     }
 
@@ -385,6 +536,11 @@ public class TestAttemptService {
 
     private boolean isSubmitted(TestAttempt attempt) {
         String s = attempt.getStatus();
-        return "submitted".equalsIgnoreCase(s) || "auto_submitted_security".equalsIgnoreCase(s) || "auto_submitted_timeout".equalsIgnoreCase(s);
+        return "submitted".equalsIgnoreCase(s) 
+            || "auto_submitted".equalsIgnoreCase(s) 
+            || "auto_submitted_security".equalsIgnoreCase(s) 
+            || "auto_submitted_timeout".equalsIgnoreCase(s)
+            || "terminated".equalsIgnoreCase(s)
+            || "cancelled".equalsIgnoreCase(s);
     }
 }

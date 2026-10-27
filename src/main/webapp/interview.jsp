@@ -79,11 +79,6 @@
                     <h1 class="page-title">AI Mock Interview Studio</h1>
                     <p class="page-subtitle">Practice role-tailored technical & behavioral interviews with instant AI feedback & scoring</p>
                 </div>
-                <div style="display: flex; gap: 0.75rem;">
-                    <a href="${pageContext.request.contextPath}/react-portal" class="btn btn-secondary btn-sm" style="display: flex; align-items: center; gap: 0.35rem;">
-                        <span>&#9883;</span> React Modern View
-                    </a>
-                </div>
             </header>
 
             <!-- React Interview Studio Container -->
@@ -261,31 +256,38 @@
                         })
                     });
                     const data = await res.json();
-                    if (data.success) {
+                    if (data && data.success) {
                         setEvalFeedback({
                             score: data.score,
                             feedback: data.feedback
                         });
 
-                        setTimeout(() => {
-                            if (data.isCompleted) {
-                                finishInterview();
-                            } else if (data.nextQuestion) {
-                                setCurrentQuestion(data.nextQuestion);
-                                setCurrentQuestionIndex(data.nextQuestionIndex);
-                                setUserAnswer("");
-                                setEvalFeedback(null);
-                                setTimerSeconds(120);
-                                speakQuestion(data.nextQuestion.questionText);
+                        setTimeout(async () => {
+                            try {
+                                if (data.isCompleted) {
+                                    await finishInterview();
+                                } else if (data.nextQuestion) {
+                                    setCurrentQuestion(data.nextQuestion);
+                                    setCurrentQuestionIndex(data.nextQuestionIndex);
+                                    setUserAnswer("");
+                                    setEvalFeedback(null);
+                                    setTimerSeconds(120);
+                                    speakQuestion(data.nextQuestion.questionText);
+                                }
+                            } catch (err) {
+                                console.error("Error advancing interview question:", err);
+                            } finally {
+                                setIsEvaluating(false);
                             }
-                            setIsEvaluating(false);
                         }, 2500);
                     } else {
                         setIsEvaluating(false);
+                        alert((data && (data.error || data.message)) || "Evaluation failed. Please try submitting again.");
                     }
                 } catch (e) {
                     setIsEvaluating(false);
                     console.error("Answer submission failed", e);
+                    alert("Network error evaluating answer. Please retry.");
                 }
             };
 
@@ -297,15 +299,18 @@
                         body: JSON.stringify({ sessionId: sessionId })
                     });
                     const data = await res.json();
-                    if (data.success) {
+                    if (data && data.success) {
                         setFinalReport(data.report);
                         setSessionState("REPORT");
                         if (window.confetti) {
                             window.confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 } });
                         }
+                    } else {
+                        alert("Could not load final report: " + ((data && (data.error || data.message)) || "Unknown error"));
                     }
                 } catch (e) {
                     console.error("Finish interview failed", e);
+                    alert("Network error generating final report. Please check your connection.");
                 }
             };
 

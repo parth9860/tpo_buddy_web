@@ -24,10 +24,16 @@ public class TestEvaluationService {
     public static class EvaluationPayload {
         public final TestResult result;
         public final JsonArray questionReviews;
+        public TestAttempt attempt;
 
         public EvaluationPayload(TestResult result, JsonArray questionReviews) {
+            this(result, questionReviews, null);
+        }
+
+        public EvaluationPayload(TestResult result, JsonArray questionReviews, TestAttempt attempt) {
             this.result = result;
             this.questionReviews = questionReviews;
+            this.attempt = attempt;
         }
     }
 
@@ -186,6 +192,6 @@ public class TestEvaluationService {
         result.setRiskScore(attempt != null ? attempt.getRiskScore() : 0);
         result.setCompletedAt(now);
 
-        return new EvaluationPayload(result, reviews);
+        return new EvaluationPayload(result, reviews, attempt);
     }
 }

@@ -63,6 +63,7 @@ public class TestAttempt implements Serializable {
     private String sectionBreakdownJson = "{}";
     private String weakTopicsJson = "[]";
     private String recommendedPractice = "";
+    private String questionReviewsJson = "[]";
 
     public TestAttempt() {
         this.status = "submitted";
@@ -416,6 +417,14 @@ public class TestAttempt implements Serializable {
 
     public void setRecommendedPractice(String recommendedPractice) {
         this.recommendedPractice = recommendedPractice;
+    }
+
+    public String getQuestionReviewsJson() {
+        return questionReviewsJson != null ? questionReviewsJson : "[]";
+    }
+
+    public void setQuestionReviewsJson(String questionReviewsJson) {
+        this.questionReviewsJson = questionReviewsJson;
     }
 
     public String getSeriesId() {

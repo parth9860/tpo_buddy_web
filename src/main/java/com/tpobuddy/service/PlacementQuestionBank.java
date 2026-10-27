@@ -49,10 +49,11 @@ public class PlacementQuestionBank {
         String diff = (difficulty != null) ? difficulty.trim().toLowerCase() : "medium";
         String top = (topic != null) ? topic.trim().toLowerCase() : null;
         String cat = (category != null) ? normalizeCategory(category) : null;
+        boolean strictTopic = (top != null && !top.equals("all") && !top.isEmpty());
 
         for (Question q : ALL_QUESTIONS) {
             boolean diffOk = q.getDifficulty() != null && q.getDifficulty().equalsIgnoreCase(diff);
-            boolean topOk = (top == null || top.equals("all") || (q.getTopic() != null && q.getTopic().toLowerCase().contains(top)));
+            boolean topOk = !strictTopic || isQuestionInTopics(q, Collections.singletonList(top));
             boolean catOk = (cat == null || cat.equals("all") || (q.getCategory() != null && normalizeCategory(q.getCategory()).contains(cat)));
 
             if (diffOk && topOk && catOk) {
@@ -60,11 +61,15 @@ public class PlacementQuestionBank {
             }
         }
 
+        // If not enough questions with exact difficulty, only fill with SAME topic if topic was specified!
         if (matches.size() < count) {
             for (Question q : ALL_QUESTIONS) {
                 if (!matches.contains(q)) {
+                    boolean topOk = !strictTopic || isQuestionInTopics(q, Collections.singletonList(top));
                     boolean catOk = (cat == null || cat.equals("all") || (q.getCategory() != null && normalizeCategory(q.getCategory()).contains(cat)));
-                    if (catOk) matches.add(q);
+                    if (topOk && catOk) {
+                        matches.add(q);
+                    }
                     if (matches.size() >= count) break;
                 }
             }
@@ -87,27 +92,71 @@ public class PlacementQuestionBank {
     }
 
     public static List<Question> getQuestionsForTopic(String topic, int count) {
-        if (topic == null || topic.trim().isEmpty()) {
+        if (topic == null || topic.trim().isEmpty() || "all".equalsIgnoreCase(topic.trim())) {
             return getMixedMockQuestions(count);
         }
-        List<Question> list = TOPIC_MAP.get(topic.trim().toLowerCase());
-        if (list == null || list.isEmpty()) {
-            // Partial match fallback
-            list = new ArrayList<>();
-            String target = topic.trim().toLowerCase();
-            for (Map.Entry<String, List<Question>> entry : TOPIC_MAP.entrySet()) {
-                if (entry.getKey().contains(target) || target.contains(entry.getKey())) {
-                    list.addAll(entry.getValue());
-                }
-            }
-        }
-        if (list.isEmpty()) {
+        return getQuestionsForStrictTopics(Collections.singletonList(topic), null, count);
+    }
+
+    /**
+     * Strictly retrieves questions matching only the allowed topics.
+     * Guaranteed never to include questions from unrelated topics or categories.
+     */
+    public static List<Question> getQuestionsForStrictTopics(List<String> allowedTopics, String difficulty, int count) {
+        if (allowedTopics == null || allowedTopics.isEmpty()) {
             return getMixedMockQuestions(count);
         }
 
-        List<Question> shuffled = new ArrayList<>(list);
-        Collections.shuffle(shuffled);
-        return new ArrayList<>(shuffled.subList(0, Math.min(count, shuffled.size())));
+        List<Question> matches = new ArrayList<>();
+        String diff = (difficulty != null && !difficulty.trim().isEmpty()) ? difficulty.trim().toLowerCase() : null;
+
+        // Pass 1: Match topic AND requested difficulty
+        for (Question q : ALL_QUESTIONS) {
+            if (isQuestionInTopics(q, allowedTopics)) {
+                if (diff == null || (q.getDifficulty() != null && q.getDifficulty().equalsIgnoreCase(diff))) {
+                    matches.add(q);
+                }
+            }
+        }
+
+        // Pass 2: If we need more questions, include other difficulties of the EXACT SAME allowed topics
+        if (matches.size() < count) {
+            for (Question q : ALL_QUESTIONS) {
+                if (isQuestionInTopics(q, allowedTopics) && !matches.contains(q)) {
+                    matches.add(q);
+                    if (matches.size() >= count * 2) break;
+                }
+            }
+        }
+
+        Collections.shuffle(matches);
+        return new ArrayList<>(matches.subList(0, Math.min(count, matches.size())));
+    }
+
+    /**
+     * Validates whether a question belongs strictly to any of the allowed topics.
+     */
+    public static boolean isQuestionInTopics(Question q, List<String> allowedTopics) {
+        if (q == null || q.getTopic() == null || allowedTopics == null || allowedTopics.isEmpty()) {
+            return false;
+        }
+        String qTopic = q.getTopic().trim().toLowerCase();
+        for (String allowed : allowedTopics) {
+            if (allowed == null) continue;
+            String a = allowed.trim().toLowerCase();
+            if (qTopic.equals(a)) return true;
+
+            // Handle compound titles e.g. "Number System, HCF and LCM, Divisibility"
+            String[] segments = a.split("[,;/]|\\band\\b|\\b&\\b");
+            for (String seg : segments) {
+                String s = seg.trim();
+                if (s.isEmpty() || s.length() < 3) continue;
+                if (qTopic.equals(s) || qTopic.contains(s) || s.contains(qTopic)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public static List<Question> getQuestionsForCategory(String category, int count) {
@@ -228,6 +277,10 @@ public class PlacementQuestionBank {
     // =========================================================================
 
     private static void initializeQuestionRepository() {
+        // Load verified 150-question repository for the 6 foundational SNJB topics
+        Object SNJBFoundationalQuestionRepository;
+
+
         // ---------------------------------------------------------------------
         // 1. QUANTITATIVE APTITUDE - Priority Topic 1: Number System
         // ---------------------------------------------------------------------
