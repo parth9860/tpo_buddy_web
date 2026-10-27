@@ -43,13 +43,15 @@ target/
 *.jar
 *.war
 *.ear
+*.zip
 
 # ==============================================================================
-# Node & Frontend (Client)
+# Node & Frontend (Client) & Netlify
 # ==============================================================================
 node_modules/
 client/node_modules/
 client/dist/
+.netlify/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

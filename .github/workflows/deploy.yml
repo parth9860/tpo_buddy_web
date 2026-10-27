@@ -1,0 +1,114 @@
+name: Deploy to Netlify
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-build:
+    name: Build & Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      - name: Validate Backend Code & Run Test Suite
+        run: |
+          echo "Compiling and validating Spring Boot application integrity..."
+          mvn --batch-mode clean test
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Build Frontend for Production
+        working-directory: client
+        run: npm run build
+
+      - name: Verify Production Build Output
+        run: |
+          if [ ! -f "client/dist/index.html" ]; then
+            echo "::error::Build verification failed: client/dist/index.html was not generated!"
+            exit 1
+          fi
+          echo "✓ Production build verified. Output directory contents:"
+          ls -la client/dist/
+
+      - name: Upload Production Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: netlify-production-dist
+          path: client/dist/
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Netlify
+    needs: validate-and-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Download Production Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: netlify-production-dist
+          path: client/dist
+
+      - name: Check Netlify Deployment Credentials
+        id: check-secrets
+        run: |
+          if [ -z "${{ secrets.NETLIFY_AUTH_TOKEN }}" ] || [ -z "${{ secrets.NETLIFY_SITE_ID }}" ]; then
+            echo "::error::Missing Netlify credentials in GitHub repository secrets!"
+            echo "------------------------------------------------------------------"
+            echo "To complete automatic deployment, configure these secrets in GitHub:"
+            echo "1. Go to repository Settings -> Secrets and variables -> Actions"
+            echo "2. Add 'NETLIFY_AUTH_TOKEN': Personal Access Token from Netlify User Settings -> Applications"
+            echo "3. Add 'NETLIFY_SITE_ID': API ID from Netlify Site Configuration -> General -> Site details"
+            echo "------------------------------------------------------------------"
+            exit 1
+          fi
+          echo "Netlify credentials verified in secrets context."
+
+      - name: Set up Node.js for Netlify CLI
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Deploy to Netlify Production
+        run: |
+          echo "Deploying production build to Netlify..."
+          npx netlify-cli deploy \
+            --prod \
+            --dir=client/dist \
+            --site="${{ secrets.NETLIFY_SITE_ID }}" \
+            --auth="${{ secrets.NETLIFY_AUTH_TOKEN }}" \
+            --message="GitHub Actions Deploy - Commit: ${{ github.sha }}"
+
+      - name: Deployment Summary
+        if: success()
+        run: |
+          echo "### 🚀 Netlify Deployment Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed By:** \`${{ github.actor }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Workflow:** Netlify Production Deploy via GitHub Actions" >> $GITHUB_STEP_SUMMARY

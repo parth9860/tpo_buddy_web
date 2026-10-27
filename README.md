@@ -614,6 +614,83 @@ Every test supports 3 difficulty levels selectable before generation:
 
 ---
 
+## 🚀 Automated CI/CD & Netlify Deployment (GitHub Actions)
+
+TPO Buddy includes an enterprise automated CI/CD pipeline built with **GitHub Actions** and **Netlify**. Every push to the `main` branch automatically validates the full-stack codebase, compiles the client application, and deploys the latest production release to Netlify.
+
+### 1. Deployment Architecture
+
+```
+Developer Workstation
+      │
+      ▼  (git push origin main)
+GitHub Repository (parth9860/tpo_buddy_web)
+      │
+      ▼  (Webhook Trigger)
+GitHub Actions CI/CD Runner
+      ├── Step 1: Checkout Code (actions/checkout@v4)
+      ├── Step 2: Set up Java 21 & Verify Spring Boot backend (mvn clean test)
+      ├── Step 3: Set up Node.js 20 & Install dependencies (npm ci)
+      ├── Step 4: Build Client Production Bundle (npm run build -> client/dist)
+      ├── Step 5: Verify Build Artifacts (client/dist/index.html)
+      └── Step 6: Deploy to Netlify Production via Netlify CLI (npx netlify-cli deploy --prod)
+      │
+      ▼  (Live Production Update)
+Netlify CDN Global Edge Network
+```
+
+### 2. Required GitHub Repository Secrets
+
+To enable automatic deployment, configure the following secrets in your GitHub repository:
+**GitHub Repository → Settings → Secrets and variables → Actions → New repository secret**:
+
+| Secret Name | Description | Where to find it in Netlify |
+|---|---|---|
+| `NETLIFY_AUTH_TOKEN` | Personal Access Token used to authenticate Netlify CLI | Netlify User Settings → **Applications** → **OAuth** → **New access token** |
+| `NETLIFY_SITE_ID` | Unique API ID of your Netlify site | Netlify Site Dashboard → **Site configuration** → **Site details** → **API ID** |
+
+> [!IMPORTANT]
+> Never hardcode or commit tokens or API IDs to the repository. The workflow reads them securely from `${{ secrets.NETLIFY_AUTH_TOKEN }}` and `${{ secrets.NETLIFY_SITE_ID }}`.
+
+### 3. Netlify Configuration (`netlify.toml`)
+
+The root `netlify.toml` configures client routing and asset delivery:
+- **Build Directory**: `client`
+- **Build Command**: `npm run build`
+- **Publish Directory**: `dist` (relative to `client`, i.e., `client/dist`)
+- **SPA Fallback**: Redirects `/*` to `/index.html` with status `200` for client-side routing.
+- **Cache Headers**: Implements immutable 1-year cache headers for `/assets/*` chunks.
+
+### 4. Docker Containerization (Backend Hosting)
+
+For deploying the Java 21 Spring Boot backend to container platforms (such as Render, Railway, AWS ECS, or Fly.io):
+
+```bash
+# Build the production Docker image
+docker build -t tpo-buddy:latest .
+
+# Run container locally on port 8085
+docker run -p 8085:8085 --env-file .env tpo-buddy:latest
+
+# Or launch with docker-compose
+docker-compose up -d
+```
+
+### 5. Deployment Workflow & Verification
+
+Whenever you make changes to the application:
+
+```bash
+git add .
+git commit -m "feat: enhance placement portal"
+git push origin main
+```
+
+1. **GitHub Actions**: Navigate to your GitHub repo's **Actions** tab to watch the `Deploy to Netlify` workflow run live.
+2. **Netlify Dashboard**: Open your Netlify site overview under **Deploys** to see the published production deploy and live URL.
+
+---
+
 ## 💡 Troubleshooting Guide for Beginners
 
 ### Problem: "The JAVA_HOME environment variable is not defined correctly"
