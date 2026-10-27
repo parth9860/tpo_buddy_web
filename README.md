@@ -587,30 +587,7 @@ Every test supports 3 difficulty levels selectable before generation:
 
 ---
 
-### 4. REST API Endpoints
 
-| Method | Endpoint | Description | Auth Required |
-|---|---|---|---|
-| `GET` | `/api/test-series?category=COLLEGE\|PLATFORM` | List available test series by category | Yes |
-| `GET` | `/api/test-series/{seriesId}` | Retrieve detailed series syllabus and weights | Yes |
-| `POST` | `/api/test-attempts` | Initiate test attempt & trigger AI generation (50→30) | Yes (Student) |
-| `GET` | `/api/test-attempts/{attemptId}/status` | Poll AI question generation progress | Yes (Owner) |
-| `GET` | `/api/test-attempts/{attemptId}/questions` | Fetch 30 sanitized questions (Zero answer leaks!) | Yes (Owner) |
-| `POST` | `/api/test-attempts/{attemptId}/save-progress` | Autosave ongoing answers | Yes (Owner) |
-| `POST` | `/api/test-attempts/{attemptId}/log-event` | Log proctoring integrity events (tab switch, etc.) | Yes (Owner) |
-| `POST` | `/api/test-attempts/{attemptId}/submit` | Authoritative server grading & analytics evaluation | Yes (Owner) |
-| `GET` | `/api/test-results` | Fetch student completed test results & weak topics | Yes (Student) |
-
-### 5. Test Checklist for Student & Admin Workflows
-- [x] **Student Login**: Sign in at `/login.jsp` with student credentials.
-- [x] **Browse Tests**: Open `/tests` or click "Placement Tests" in the sidebar / dashboard.
-- [x] **Launch Topic Test**: Choose any of the 6 foundational topics (e.g., Number System, Percentages).
-- [x] **Proctored Taking**: Enter fullscreen, navigate between questions using question palette, mark for review.
-- [x] **Submit & Score**: Submit test to receive instant score, accuracy, pass status, and step-by-step solution review.
-- [x] **Metric Synchronization**: Updated score syncs to student metrics in Firebase Realtime Database.
-- [x] **Admin Test Management**: Faculty/Admin can access `/faculty#snjb-management` to view active tests, duplicates, and analytics.
-- [x] **CSV Question Import**: Import CSV questions into question bank.
-- [x] **CSV Results Export**: Download batch performance report.
 
 ---
 
