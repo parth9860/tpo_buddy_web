@@ -38,12 +38,18 @@ public class InterviewController {
             return "redirect:/login.jsp";
         }
 
-        InterviewSession latestReport = interviewService.getLatestReport(user.getUid());
-        List<InterviewSession> history = interviewService.getUserHistory(user.getUid());
+        InterviewSession latestReport = null;
+        List<InterviewSession> history = java.util.Collections.emptyList();
+        try {
+            latestReport = interviewService.getLatestReport(user.getUid());
+            history = interviewService.getUserHistory(user.getUid());
+        } catch (Exception e) {
+            System.err.println("Notice: Failed to fetch interview history: " + e.getMessage());
+        }
 
         model.addAttribute("user", user);
         model.addAttribute("latestReport", latestReport);
-        model.addAttribute("history", history);
+        model.addAttribute("history", history != null ? history : java.util.Collections.emptyList());
         return "interview";
     }
 

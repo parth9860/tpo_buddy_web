@@ -1,4 +1,4 @@
-<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<%@ page contentType="text/html;charset=UTF-8" language="java" isELIgnored="true" %>
 <%@ page import="com.tpobuddy.model.User" %>
 <%@ page import="com.tpobuddy.model.InterviewSession" %>
 <%@ page import="java.util.List" %>
@@ -474,7 +474,7 @@
                                         key={role}
                                         type="button"
                                         onClick={() => setSelectedRole(role)}
-                                        className={`option-chip ${selectedRole === role ? 'active' : ''}`}
+                                        className={'option-chip ' + (selectedRole === role ? 'active' : '')}
                                     >
                                         {role}
                                     </button>
@@ -493,7 +493,7 @@
                                         key={d.id}
                                         type="button"
                                         onClick={() => setSelectedDifficulty(d.id)}
-                                        className={`option-chip ${selectedDifficulty === d.id ? 'active' : ''}`}
+                                        className={'option-chip ' + (selectedDifficulty === d.id ? 'active' : '')}
                                         style={{ minWidth: '170px', textAlign: 'left', padding: '0.75rem 1rem' }}
                                     >
                                         <div style={{ fontWeight: 700 }}>{d.label}</div>
@@ -514,7 +514,7 @@
                                         key={qc.count}
                                         type="button"
                                         onClick={() => setSelectedCount(qc.count)}
-                                        className={`option-chip ${selectedCount === qc.count ? 'active' : ''}`}
+                                        className={'option-chip ' + (selectedCount === qc.count ? 'active' : '')}
                                     >
                                         {qc.label} &bull; <span style={{ opacity: 0.85 }}>{qc.tag}</span>
                                     </button>
@@ -821,7 +821,7 @@
                                             </div>
                                             <p style={{ fontWeight: 600, fontSize: '0.95rem', margin: '0 0 0.5rem 0' }}>{q.questionText}</p>
                                             <div style={{ background: 'rgba(0,0,0,0.03)', padding: '0.75rem', borderRadius: '6px', fontSize: '0.875rem', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>
-                                                <strong>Your Answer:</strong> {q.userAnswer ? q.userAnswer : '<No answer recorded>'}
+                                                <strong>Your Answer:</strong> {q.userAnswer ? q.userAnswer : '[No answer recorded]'}
                                             </div>
                                             {q.aiFeedback && (
                                                 <div style={{ fontSize: '0.85rem', color: '#047857', background: '#f0fdf4', padding: '0.5rem 0.75rem', borderRadius: '6px' }}>
