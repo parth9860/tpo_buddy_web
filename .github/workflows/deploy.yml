@@ -96,19 +96,34 @@ jobs:
           fi
           echo "Netlify credentials verified in secrets context."
 
+      - name: Verify Production Build Artifact
+        run: |
+          echo "Verifying files in client/dist:"
+          ls -la client/dist
+          if [ ! -f "client/dist/index.html" ]; then
+            echo "::error::Build verification failed: client/dist/index.html was not found in artifact!"
+            exit 1
+          fi
+
       - name: Set up Node.js for Netlify CLI
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
+      - name: Install Netlify CLI
+        run: npm install -g netlify-cli
+
       - name: Deploy to Netlify Production
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         run: |
           echo "Deploying production build to Netlify..."
-          npx netlify-cli deploy \
+          netlify deploy \
             --prod \
             --dir=client/dist \
-            --site="${{ secrets.NETLIFY_SITE_ID }}" \
-            --auth="${{ secrets.NETLIFY_AUTH_TOKEN }}" \
+            --site="$NETLIFY_SITE_ID" \
+            --auth="$NETLIFY_AUTH_TOKEN" \
             --message="GitHub Actions Deploy - Commit: ${{ github.sha }}"
 
       - name: Deployment Summary
