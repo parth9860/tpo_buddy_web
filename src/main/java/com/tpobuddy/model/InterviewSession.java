@@ -21,6 +21,11 @@ public class InterviewSession implements Serializable {
         private String aiFeedback;
         private int score; // 0 to 10
 
+        private List<String> strengths = new ArrayList<>();
+        private List<String> areasToImprove = new ArrayList<>();
+        private int technicalAccuracy; // 0 to 10
+        private int communicationClarity; // 0 to 10
+
         public InterviewQuestion() {}
 
         public InterviewQuestion(int id, String questionText, String category, String expectedConcepts) {
@@ -29,6 +34,8 @@ public class InterviewSession implements Serializable {
             this.category = category;
             this.expectedConcepts = expectedConcepts;
             this.score = 0;
+            this.technicalAccuracy = 0;
+            this.communicationClarity = 0;
         }
 
         public int getId() { return id; }
@@ -51,12 +58,27 @@ public class InterviewSession implements Serializable {
 
         public int getScore() { return score; }
         public void setScore(int score) { this.score = score; }
+
+        public List<String> getStrengths() { return strengths; }
+        public void setStrengths(List<String> strengths) { this.strengths = strengths; }
+
+        public List<String> getAreasToImprove() { return areasToImprove; }
+        public void setAreasToImprove(List<String> areasToImprove) { this.areasToImprove = areasToImprove; }
+
+        public int getTechnicalAccuracy() { return technicalAccuracy; }
+        public void setTechnicalAccuracy(int technicalAccuracy) { this.technicalAccuracy = technicalAccuracy; }
+
+        public int getCommunicationClarity() { return communicationClarity; }
+        public void setCommunicationClarity(int communicationClarity) { this.communicationClarity = communicationClarity; }
     }
 
     private String sessionId;
     private String userId;
     private String studentName;
     private String jobRole;
+    private String difficulty = "Medium";
+    private int questionCount = 5;
+    private int durationMinutes = 15;
     private long startTime;
     private long endTime;
     private String status; // "IN_PROGRESS", "COMPLETED"
@@ -89,6 +111,15 @@ public class InterviewSession implements Serializable {
 
     public String getJobRole() { return jobRole; }
     public void setJobRole(String jobRole) { this.jobRole = jobRole; }
+
+    public String getDifficulty() { return difficulty; }
+    public void setDifficulty(String difficulty) { this.difficulty = difficulty; }
+
+    public int getQuestionCount() { return questionCount; }
+    public void setQuestionCount(int questionCount) { this.questionCount = questionCount; }
+
+    public int getDurationMinutes() { return durationMinutes; }
+    public void setDurationMinutes(int durationMinutes) { this.durationMinutes = durationMinutes; }
 
     public long getStartTime() { return startTime; }
     public void setStartTime(long startTime) { this.startTime = startTime; }

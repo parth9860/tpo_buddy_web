@@ -570,12 +570,20 @@ public class FirebaseService {
     // =========================================================================
 
     public boolean saveMockInterview(String userId, Map<String, Object> data) {
-        if (userId == null || data == null) return false;
-        String interviewId = UUID.randomUUID().toString();
-        String url = databaseUrl + "/mock_interviews/" + userId + "/" + interviewId + ".json";
+        String interviewId = (data != null && data.containsKey("sessionId"))
+                ? String.valueOf(data.get("sessionId"))
+                : UUID.randomUUID().toString();
+        return saveMockInterview(userId, interviewId, data);
+    }
+
+    public boolean saveMockInterview(String userId, String interviewId, Map<String, Object> data) {
+        if (userId == null || interviewId == null || data == null) return false;
         String json = gson.toJson(data);
-        String response = executeHttpRequest(url, "PUT", json);
-        return response != null;
+        String url1 = databaseUrl + "/mock_interviews/" + userId + "/" + interviewId + ".json";
+        String url2 = databaseUrl + "/users/" + userId + "/mockInterviews/" + interviewId + ".json";
+        String r1 = executeHttpRequest(url1, "PUT", json);
+        executeHttpRequest(url2, "PUT", json);
+        return r1 != null;
     }
 
     public List<Map<String, Object>> fetchMockInterviews(String userId) {
@@ -583,6 +591,12 @@ public class FirebaseService {
         if (userId == null) return list;
         String url = databaseUrl + "/mock_interviews/" + userId + ".json";
         String response = executeHttpRequest(url, "GET", null);
+
+        // Fallback to /users/{userId}/mockInterviews.json if empty
+        if (response == null || response.equals("null") || response.trim().isEmpty()) {
+            String fallbackUrl = databaseUrl + "/users/" + userId + "/mockInterviews.json";
+            response = executeHttpRequest(fallbackUrl, "GET", null);
+        }
 
         if (response != null && !response.equals("null") && !response.trim().isEmpty()) {
             try {
@@ -593,6 +607,7 @@ public class FirebaseService {
                         Map<String, Object> item = new HashMap<>();
                         item.put("id", entry.getKey());
                         item.put("jobRole", getString(obj, "jobRole", "Software Engineer"));
+                        item.put("difficulty", getString(obj, "difficulty", "Medium"));
                         item.put("overallScore", getInt(obj, "totalScore", getInt(obj, "overallScore", 0)));
                         item.put("techScore", getInt(obj, "techScore", 0));
                         item.put("commScore", getInt(obj, "commScore", 0));

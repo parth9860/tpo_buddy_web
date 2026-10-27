@@ -8,6 +8,7 @@ export default function App() {
 
   // AI Interview State
   const [interviewRole, setInterviewRole] = useState('Full Stack Developer');
+  const [interviewDifficulty, setInterviewDifficulty] = useState('Medium');
   const [interviewState, setInterviewState] = useState('IDLE'); // IDLE, RUNNING, REPORT
   const [interviewSessionId, setInterviewSessionId] = useState(null);
   const [currentQ, setCurrentQ] = useState(null);
@@ -106,7 +107,11 @@ export default function App() {
       const res = await fetch('/api/interview/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: interviewRole })
+        body: JSON.stringify({
+          role: interviewRole,
+          difficulty: interviewDifficulty,
+          questionCount: 5
+        })
       });
       const data = await res.json();
       if (data.success) {
@@ -339,8 +344,8 @@ export default function App() {
                   Select the engineering role you are preparing for. The AI will evaluate both your technical depth and communication clarity.
                 </p>
 
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
-                  {['Full Stack Developer', 'Frontend React Developer', 'Java Backend Developer', 'Data Analyst & AI'].map(role => (
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+                  {['Full Stack Developer', 'Frontend React Developer', 'Java Backend Developer', 'Data Analyst & AI', 'DevOps & Cloud Engineer'].map(role => (
                     <button
                       key={role}
                       onClick={() => setInterviewRole(role)}
@@ -352,6 +357,22 @@ export default function App() {
                   ))}
                 </div>
 
+                <div style={{ marginBottom: '2rem' }}>
+                  <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '0.5rem', fontWeight: 600 }}>SELECT DIFFICULTY:</div>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
+                    {['Medium', 'Hard', 'Extra Hard'].map(diff => (
+                      <button
+                        key={diff}
+                        onClick={() => setInterviewDifficulty(diff)}
+                        className={interviewDifficulty === diff ? 'btn-primary' : 'btn-secondary'}
+                        style={{ padding: '0.5rem 1.25rem', borderRadius: '8px', fontSize: '0.85rem' }}
+                      >
+                        {diff}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <button onClick={startMockInterview} className="btn-primary" style={{ padding: '0.85rem 2.5rem', fontSize: '1.05rem', borderRadius: '10px' }}>
                   Begin Mock Interview →
                 </button>
@@ -361,9 +382,14 @@ export default function App() {
             {interviewState === 'RUNNING' && (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                  <span style={{ background: '#3b82f6', color: '#fff', padding: '4px 10px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600 }}>
-                    {currentQ?.category || 'Technical'}
-                  </span>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <span style={{ background: '#3b82f6', color: '#fff', padding: '4px 10px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600 }}>
+                      {currentQ?.category || 'Technical'}
+                    </span>
+                    <span style={{ background: 'rgba(255,255,255,0.08)', color: '#94a3b8', padding: '4px 8px', borderRadius: '6px', fontSize: '0.75rem' }}>
+                      {interviewRole} • {interviewDifficulty}
+                    </span>
+                  </div>
                   <span style={{ color: '#94a3b8', fontSize: '0.9rem' }}>
                     Question {qIndex + 1} of 5
                   </span>
@@ -407,7 +433,7 @@ export default function App() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '1rem' }}>
                   <div>
                     <h2 style={{ margin: 0, fontSize: '1.5rem' }}>Placement Readiness Report</h2>
-                    <div style={{ color: '#818cf8', fontSize: '0.9rem', marginTop: '0.25rem' }}>Role: {interviewReport.jobRole}</div>
+                    <div style={{ color: '#818cf8', fontSize: '0.9rem', marginTop: '0.25rem' }}>Role: {interviewReport.jobRole} ({interviewReport.difficulty || interviewDifficulty})</div>
                   </div>
                   <button onClick={() => setInterviewState('IDLE')} className="btn-secondary">
                     Start Another Track
@@ -431,6 +457,29 @@ export default function App() {
 
                 <div style={{ background: 'rgba(255,255,255,0.03)', padding: '1.25rem', borderRadius: '8px', lineHeight: 1.6, marginBottom: '1.5rem' }}>
                   <strong>Evaluation Summary: </strong> {interviewReport.summary}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  {interviewReport.strengths && interviewReport.strengths.length > 0 && (
+                    <div style={{ background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '1rem', borderRadius: '8px' }}>
+                      <h4 style={{ color: '#34d399', margin: '0 0 0.5rem 0' }}>✓ Key Strengths</h4>
+                      <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.85rem', color: '#cbd5e1' }}>
+                        {interviewReport.strengths.map((s, idx) => (
+                          <li key={idx}>{s}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {interviewReport.recommendations && interviewReport.recommendations.length > 0 && (
+                    <div style={{ background: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.2)', padding: '1rem', borderRadius: '8px' }}>
+                      <h4 style={{ color: '#fbbf24', margin: '0 0 0.5rem 0' }}>⚠ Next Steps</h4>
+                      <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.85rem', color: '#cbd5e1' }}>
+                        {interviewReport.recommendations.map((r, idx) => (
+                          <li key={idx}>{r}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
