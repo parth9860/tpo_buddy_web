@@ -80,8 +80,11 @@ public class TestAttemptService {
                     && !"auto_submitted_timeout".equalsIgnoreCase(existing.getStatus())) {
                 long now = System.currentTimeMillis();
                 if (existing.getDeadline() > 0 && now < existing.getDeadline()) {
-                    // Active valid attempt exists; return idempotently
-                    return existing;
+                    // Active valid attempt exists; return idempotently only if series and difficulty match
+                    if (series != null && series.getSeriesId().equalsIgnoreCase(existing.getSeriesId())
+                            && effDifficulty.equalsIgnoreCase(existing.getDifficulty())) {
+                        return existing;
+                    }
                 }
             }
         }

@@ -109,10 +109,20 @@ function cancelExamSetup() {
 
 function selectDifficulty(diff) {
     selectedDifficulty = diff;
+    window.selectedDifficulty = diff;
+    const input = document.getElementById('selectedDifficultyInput');
+    if (input) input.value = diff;
+
     const cards = {
         'Medium': document.getElementById('diffCardMedium'),
         'Hard': document.getElementById('diffCardHard'),
         'Extra Hard': document.getElementById('diffCardExtraHard')
+    };
+
+    const badges = {
+        'Medium': document.getElementById('diffBadgeMedium'),
+        'Hard': document.getElementById('diffBadgeHard'),
+        'Extra Hard': document.getElementById('diffBadgeExtraHard')
     };
 
     Object.keys(cards).forEach(key => {
@@ -123,8 +133,13 @@ function selectDifficulty(diff) {
                 cards[key].classList.remove('active');
             }
         }
+        if (badges[key]) {
+            badges[key].style.display = (key === diff) ? 'inline-block' : 'none';
+        }
     });
 }
+window.selectDifficulty = selectDifficulty;
+window.initiateExamSetup = initiateExamSetup;
 
 async function requestWebcamVerification() {
     const statusText = document.getElementById('setupStatusText');
@@ -172,6 +187,14 @@ async function startExamInFullscreen() {
     const setupModal = document.getElementById('examSetupModal');
     if (setupModal) setupModal.classList.remove('active');
 
+    // Ensure latest difficulty selection is picked up
+    const diffInput = document.getElementById('selectedDifficultyInput');
+    if (diffInput && diffInput.value) {
+        selectedDifficulty = diffInput.value;
+    } else if (window.selectedDifficulty) {
+        selectedDifficulty = window.selectedDifficulty;
+    }
+
     // Show AI Generation Loading Modal
     showAiLoadingModal();
 
@@ -201,12 +224,54 @@ async function startExamInFullscreen() {
                 pollGenerationStatus(activeAttemptId);
             }
         } else {
-            hideAiLoadingModal();
-            alert('Failed to initiate AI test generation: ' + (data.message || data.error || 'Server error'));
+            console.warn('API /api/test-attempts returned non-success, attempting fallback to /api/tests/start...', data);
+            await fallbackStartExam();
         }
     } catch (err) {
+        console.warn('Error connecting to /api/test-attempts, attempting fallback to /api/tests/start...', err);
+        try {
+            await fallbackStartExam();
+        } catch (fallbackErr) {
+            hideAiLoadingModal();
+            alert('Failed to initialize test: ' + (fallbackErr.message || 'Network error connecting to test engine.'));
+        }
+    }
+}
+
+async function fallbackStartExam() {
+    const fbPayload = {
+        category: selectedSubject || selectedCategory || 'Quantitative Aptitude',
+        seriesId: selectedSeriesId,
+        topic: selectedTopics || selectedSubject || 'General Assessment',
+        difficulty: selectedDifficulty || 'Medium',
+        count: 30
+    };
+
+    const res = await fetch(`${window.CONTEXT_PATH}/api/tests/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fbPayload)
+    });
+
+    const data = await res.json();
+    if (data.success && data.questions && data.questions.length > 0) {
         hideAiLoadingModal();
-        alert('Network error connecting to test series engine.');
+        activeAttemptId = data.attemptId;
+        currentQuestions = data.questions;
+        currentIndex = 0;
+        userAnswers = {};
+        markedForReview.clear();
+        remainingSeconds = data.durationSeconds || 1800;
+        violationCount = 0;
+
+        switchToExamRunnerView(selectedCategory, selectedTitle, selectedDifficulty);
+        startTimerCountdown();
+        attachSecurityWatchdogs();
+        renderQuestionPalette();
+        renderCurrentQuestion();
+    } else {
+        hideAiLoadingModal();
+        alert('Failed to initialize test questions: ' + (data.error || data.message || 'Unknown error'));
     }
 }
 

@@ -19,7 +19,7 @@
 <head>
     <title>AI Test Series — College & Platform Preparation — TPO Buddy</title>
     <jsp:include page="/WEB-INF/fragments/head.jsp" />
-    <script src="${pageContext.request.contextPath}/assets/js/tests.js"></script>
+    <script src="${pageContext.request.contextPath}/assets/js/tests.js?v=<%= System.currentTimeMillis() %>"></script>
     <style>
         /* Top Category Navigation Tabs */
         .category-nav-bar {
@@ -836,25 +836,35 @@
                             <label style="font-weight: 700; font-size: 0.875rem; color: var(--text-primary); display: block; margin-bottom: 0.25rem;">
                                 Select Difficulty Level:
                             </label>
+                            <input type="hidden" id="selectedDifficultyInput" value="Medium">
                             <div class="difficulty-options-grid">
-                                <div class="difficulty-card active" id="diffCardMedium" onclick="selectDifficulty('Medium')">
-                                    <div class="difficulty-title" style="color: #2563eb;">
-                                        <span>📘</span>
-                                        <span>Medium</span>
+                                <div class="difficulty-card active" id="diffCardMedium" onclick="selectDifficulty('Medium')" style="cursor: pointer; user-select: none;">
+                                    <div class="difficulty-title" style="color: #2563eb; display: flex; align-items: center; justify-content: space-between;">
+                                        <div style="display: flex; align-items: center; gap: 0.35rem;">
+                                            <span>📘</span>
+                                            <span>Medium</span>
+                                        </div>
+                                        <span id="diffBadgeMedium" style="font-size: 0.68rem; font-weight: 700; background: #2563eb; color: #fff; padding: 2px 7px; border-radius: 9999px;">✓ Active</span>
                                     </div>
                                     <div class="difficulty-desc">Standard placement patterns, core fundamentals, and standard applications.</div>
                                 </div>
-                                <div class="difficulty-card" id="diffCardHard" onclick="selectDifficulty('Hard')">
-                                    <div class="difficulty-title" style="color: #d97706;">
-                                        <span>📙</span>
-                                        <span>Hard</span>
+                                <div class="difficulty-card" id="diffCardHard" onclick="selectDifficulty('Hard')" style="cursor: pointer; user-select: none;">
+                                    <div class="difficulty-title" style="color: #d97706; display: flex; align-items: center; justify-content: space-between;">
+                                        <div style="display: flex; align-items: center; gap: 0.35rem;">
+                                            <span>📙</span>
+                                            <span>Hard</span>
+                                        </div>
+                                        <span id="diffBadgeHard" style="font-size: 0.68rem; font-weight: 700; background: #d97706; color: #fff; padding: 2px 7px; border-radius: 9999px; display: none;">✓ Active</span>
                                     </div>
                                     <div class="difficulty-desc">Multistep reasoning, moderate algorithmic depth, and applied technical concepts.</div>
                                 </div>
-                                <div class="difficulty-card" id="diffCardExtraHard" onclick="selectDifficulty('Extra Hard')">
-                                    <div class="difficulty-title" style="color: #dc2626;">
-                                        <span>📕</span>
-                                        <span>Extra Hard</span>
+                                <div class="difficulty-card" id="diffCardExtraHard" onclick="selectDifficulty('Extra Hard')" style="cursor: pointer; user-select: none;">
+                                    <div class="difficulty-title" style="color: #dc2626; display: flex; align-items: center; justify-content: space-between;">
+                                        <div style="display: flex; align-items: center; gap: 0.35rem;">
+                                            <span>📕</span>
+                                            <span>Extra Hard</span>
+                                        </div>
+                                        <span id="diffBadgeExtraHard" style="font-size: 0.68rem; font-weight: 700; background: #dc2626; color: #fff; padding: 2px 7px; border-radius: 9999px; display: none;">✓ Active</span>
                                     </div>
                                     <div class="difficulty-desc">Advanced reasoning, edge cases, complex problem-solving, and tricky output prediction.</div>
                                 </div>
@@ -1017,6 +1027,37 @@
                 }
             });
         }
+
+        window.selectDifficulty = function(diff) {
+            window.selectedDifficulty = diff;
+            var hiddenInput = document.getElementById('selectedDifficultyInput');
+            if (hiddenInput) hiddenInput.value = diff;
+
+            var cards = {
+                'Medium': document.getElementById('diffCardMedium'),
+                'Hard': document.getElementById('diffCardHard'),
+                'Extra Hard': document.getElementById('diffCardExtraHard')
+            };
+
+            var badges = {
+                'Medium': document.getElementById('diffBadgeMedium'),
+                'Hard': document.getElementById('diffBadgeHard'),
+                'Extra Hard': document.getElementById('diffBadgeExtraHard')
+            };
+
+            Object.keys(cards).forEach(function(key) {
+                if (cards[key]) {
+                    if (key === diff) {
+                        cards[key].classList.add('active');
+                    } else {
+                        cards[key].classList.remove('active');
+                    }
+                }
+                if (badges[key]) {
+                    badges[key].style.display = (key === diff) ? 'inline-block' : 'none';
+                }
+            });
+        };
     </script>
 </body>
 </html>

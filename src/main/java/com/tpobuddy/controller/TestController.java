@@ -194,7 +194,33 @@ public class TestController {
         String category = payload.has("category") ? payload.get("category").getAsString() : "Quantitative Aptitude";
         String topic = payload.has("topic") ? payload.get("topic").getAsString() : null;
         String testId = payload.has("testId") ? payload.get("testId").getAsString() : null;
-        int count = payload.has("count") ? payload.get("count").getAsInt() : 25;
+        String difficulty = payload.has("difficulty") ? payload.get("difficulty").getAsString() : "Medium";
+        
+        int count = 30;
+        if (payload.has("count")) {
+            try {
+                count = payload.get("count").getAsInt();
+            } catch (Exception e) {
+                try {
+                    count = Integer.parseInt(payload.get("count").getAsString());
+                } catch (Exception ignored) {
+                    count = 30;
+                }
+            }
+        }
+
+        // Map seriesId aliases if passed as category
+        if ("college_snjb_quant".equalsIgnoreCase(category)) {
+            category = "Quantitative Aptitude";
+        } else if ("college_snjb_logical".equalsIgnoreCase(category)) {
+            category = "Logical Reasoning";
+        } else if ("college_snjb_verbal".equalsIgnoreCase(category)) {
+            category = "Verbal Ability";
+        } else if ("college_snjb_tech".equalsIgnoreCase(category)) {
+            category = "Technical and Coding";
+        } else if ("college_snjb_full_mock".equalsIgnoreCase(category)) {
+            category = "all";
+        }
 
         PlacementTest pTest = (testId != null) ? placementTestService.getTestById(testId) : null;
         if (pTest != null) {
