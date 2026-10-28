@@ -32,6 +32,8 @@ const navbarFrag = fs.readFileSync(path.resolve(webappDir, 'WEB-INF/fragments/na
 const footerFrag = fs.readFileSync(path.resolve(webappDir, 'WEB-INF/fragments/footer.jsp'), 'utf-8');
 const sidebarFrag = fs.readFileSync(path.resolve(webappDir, 'WEB-INF/fragments/sidebar.jsp'), 'utf-8');
 
+const BUILD_VERSION = Date.now();
+
 // Fragment pre-processing
 function cleanHead(content) {
   return content
@@ -45,7 +47,11 @@ function cleanHead(content) {
     .replace(/<%= Config\.get\("firebase\.messagingSenderId"[^)]*\) %>/g, '811364970356')
     .replace(/<%= Config\.getFirebaseAppId\(\) %>/g, '1:811364970356:web:09bc29db4bff3a07cb4621')
     .replace(/<%= Config\.getFirebaseMeasurementId\(\) %>/g, 'G-K3KP8NTCSF')
-    .replace(/window\.CONTEXT_PATH\s*=\s*'[^']*';/, "window.CONTEXT_PATH = '';");
+    .replace(/window\.CONTEXT_PATH\s*=\s*'[^']*';/, "window.CONTEXT_PATH = '';")
+    .replace(/\/assets\/css\/dashboard\.css/g, `/assets/css/dashboard.css?v=${BUILD_VERSION}`)
+    .replace(/\/assets\/css\/main\.css/g, `/assets/css/main.css?v=${BUILD_VERSION}`)
+    .replace(/\/assets\/css\/animations\.css/g, `/assets/css/animations.css?v=${BUILD_VERSION}`)
+    .replace(/\/assets\/js\/auth\.js/g, `/assets/js/auth.js?v=${BUILD_VERSION}`);
 }
 
 function cleanNavbar(content) {

@@ -14,10 +14,10 @@
             <div class="logo-orb">TB</div>
             <span class="sidebar-brand-text">TPO<span style="color: var(--secondary);">Buddy</span></span>
         </a>
-        <button type="button" class="sidebar-toggle-btn" id="sidebarToggleBtn" aria-label="Toggle navigation menu" title="Expand menu (⋮)">
+        <button type="button" class="sidebar-toggle-btn" id="sidebarToggleBtn" aria-label="Toggle navigation menu" title="Expand menu (⋮)" aria-expanded="false">
             <span class="toggle-dots">⋮</span>
         </button>
-        <button type="button" class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close menu" title="Close menu">✕</button>
+        <button type="button" class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close menu" title="Close menu" style="display: none;">✕</button>
     </div>
 
     <ul class="sidebar-nav">
@@ -29,10 +29,8 @@
         </li>
         <li>
             <a href="${pageContext.request.contextPath}/tests" class="nav-item-link <%= currentPath.contains("tests") ? "active" : "" %>" id="nav-tests" title="AI Test Series">
-                <div style="display: flex; align-items: center; gap: 0.85rem;">
-                    <span class="nav-icon">&#127919;</span>
-                    <span class="nav-item-text">AI Test Series</span>
-                </div>
+                <span class="nav-icon">&#127919;</span>
+                <span class="nav-item-text">AI Test Series</span>
                 <span class="badge nav-item-badge" style="font-size: 0.65rem; background: #2563eb; color: #fff; padding: 2px 7px; border-radius: 9999px; font-weight: 700;">Live</span>
             </a>
         </li>
@@ -174,12 +172,20 @@
                 sidebar.classList.remove('collapsed');
                 sidebar.classList.add('expanded');
                 document.body.classList.remove('sidebar-collapsed');
-                if (toggleBtn) toggleBtn.setAttribute('title', 'Collapse menu');
+                if (toggleBtn) {
+                    toggleBtn.innerHTML = '<span class="toggle-dots">◀</span>';
+                    toggleBtn.setAttribute('title', 'Collapse menu');
+                    toggleBtn.setAttribute('aria-expanded', 'true');
+                }
             } else {
                 sidebar.classList.add('collapsed');
                 sidebar.classList.remove('expanded');
                 document.body.classList.add('sidebar-collapsed');
-                if (toggleBtn) toggleBtn.setAttribute('title', 'Expand menu (⋮)');
+                if (toggleBtn) {
+                    toggleBtn.innerHTML = '<span class="toggle-dots">⋮</span>';
+                    toggleBtn.setAttribute('title', 'Expand menu (⋮)');
+                    toggleBtn.setAttribute('aria-expanded', 'false');
+                }
             }
         }
 
@@ -231,7 +237,7 @@
             }
         });
 
-        // When user selects a feature: register destination, smoothly collapse to rail, navigate
+        // When user selects a feature: smoothly collapse to rail, navigate
         const navLinks = document.querySelectorAll('.app-sidebar .nav-item-link');
         navLinks.forEach(link => {
             link.addEventListener('click', function(e) {
@@ -246,6 +252,11 @@
                     sidebar.classList.add('collapsed');
                     sidebar.classList.remove('expanded');
                     document.body.classList.add('sidebar-collapsed');
+                    if (toggleBtn) {
+                        toggleBtn.innerHTML = '<span class="toggle-dots">⋮</span>';
+                        toggleBtn.setAttribute('title', 'Expand menu (⋮)');
+                        toggleBtn.setAttribute('aria-expanded', 'false');
+                    }
                 }
             });
         });
