@@ -611,51 +611,381 @@
                         </div>
                     </div>
 
-                    <!-- Series 2: Basic Computer Science (12 Core Subjects) & Series 3: College Specific Grid -->
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem;" id="collegeSeriesGrid">
-                        <% if (collegeSeries != null) {
-                            for (TestSeries ts : collegeSeries) {
-                                // Skip snjb full mock since it's already rendered in the top banner
-                                if ("college_snjb_full_mock".equals(ts.getSeriesId()) ||
-                                    "college_snjb_quant".equals(ts.getSeriesId()) ||
-                                    "college_snjb_logical".equals(ts.getSeriesId()) ||
-                                    "college_snjb_verbal".equals(ts.getSeriesId()) ||
-                                    "college_snjb_tech".equals(ts.getSeriesId())) {
-                                    continue;
-                                }
-                                String badgeType = "BASIC_CS".equals(ts.getSeriesType()) ? "Series 2: Basic CS" : "Series 3: College Specific";
-                        %>
-                            <div class="series-card college-group-item" data-group="<%= ts.getSeriesType() %>">
-                                <div>
-                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
-                                        <span class="badge badge-primary" style="font-size: 0.75rem;"><%= badgeType %></span>
-                                        <span class="badge badge-outline" style="font-size: 0.75rem;"><%= ts.getDurationMinutes() %> Mins</span>
-                                    </div>
-                                    <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
-                                        <span><%= ts.getIcon() != null ? ts.getIcon() : "📝" %></span>
-                                        <span><%= ts.getName() %></span>
-                                    </h3>
-                                    <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
-                                        <%= ts.getDescription() %>
-                                    </p>
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                                        <div>📝 <strong><%= ts.getQuestionCount() %></strong> Questions</div>
-                                        <div>🎯 <strong>+<%= ts.getMarksPerQuestion() %></strong> Marks/Q</div>
-                                        <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
-                                        <div>✓ 3 Difficulty Levels</div>
-                                    </div>
-                                </div>
-                                <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('<%= ts.getSeriesId() %>', '<%= ts.getName() %>', '<%= ts.getCategory() %>', '<%= ts.getSubject() %>', null)">
-                                    Configure & Start Test →
-                                </button>
+                    <!-- Live Published SNJB Test Series from Firebase -->
+                    <div style="margin-bottom: 2.25rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.15rem; flex-wrap: wrap; gap: 0.5rem;">
+                            <div>
+                                <h3 style="font-size: 1.2rem; font-weight: 800; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🏛️</span>
+                                    <span>SNJB Placement Test Series</span>
+                                    <span class="badge badge-primary" style="font-size: 0.7rem;">Live from Firebase</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0.25rem 0 0 0;">
+                                    Official college placement assessments with strict timing, 30 questions, and proctoring.
+                                </p>
                             </div>
-                        <%  }
-                        } %>
+                            <span class="badge badge-outline" style="font-size: 0.75rem;">Campus Requirement</span>
+                        </div>
+                        <div id="firebaseSnjbCollegeTestsContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem;">
+                            <div style="background: #f8fafc; border: 1px dashed var(--border-subtle); border-radius: var(--radius-sm); padding: 1.5rem; text-align: center; color: var(--text-muted); grid-column: 1 / -1;">
+                                <span>⏳ Loading published SNJB Test Series from Firebase...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Series 2: Basic Computer Science (12 Core Subjects) & Series 3: College Specific Grid -->
+                    <div style="margin-bottom: 1rem;">
+                        <h3 style="font-size: 1.2rem; font-weight: 800; color: var(--text-primary); margin: 0 0 0.25rem 0;">
+                            Series 2: Core Computer Science &amp; Departmental Tests
+                        </h3>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0 0 1.25rem 0;">
+                            Standardized subject assessments covering foundational engineering curriculum and technical screening rounds.
+                        </p>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem;" id="collegeSeriesGrid">
+                        <!-- 1. Programming Fundamentals -->
+                        <div class="series-card college-group-item" data-group="BASIC_CS">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-primary" style="font-size: 0.75rem;">Series 2: Basic CS</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">30 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>⚙️</span>
+                                    <span>Programming Fundamentals</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Core programming constructs, variables, loops, control flow, functions, and memory basics.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('college_cs_programming_fundamentals', 'Programming Fundamentals Assessment', 'COLLEGE', 'Programming Fundamentals', null)">
+                                Configure & Start Test →
+                            </button>
+                        </div>
+
+                        <!-- 2. Object-Oriented Programming -->
+                        <div class="series-card college-group-item" data-group="BASIC_CS">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-primary" style="font-size: 0.75rem;">Series 2: Basic CS</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">30 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🧱</span>
+                                    <span>Object-Oriented Programming</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Classes, objects, inheritance, polymorphism, encapsulation, abstraction, and OOP design.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('college_cs_object_oriented_programming', 'Object-Oriented Programming Assessment', 'COLLEGE', 'Object-Oriented Programming', null)">
+                                Configure & Start Test →
+                            </button>
+                        </div>
+
+                        <!-- 3. Data Structures and Algorithms -->
+                        <div class="series-card college-group-item" data-group="BASIC_CS">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-primary" style="font-size: 0.75rem;">Series 2: Basic CS</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">30 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🌲</span>
+                                    <span>Data Structures and Algorithms</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Arrays, linked lists, stacks, queues, trees, BST, hashing, searching, sorting, and complexity.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('college_cs_data_structures_and_algorithms', 'Data Structures and Algorithms Assessment', 'COLLEGE', 'Data Structures and Algorithms', null)">
+                                Configure & Start Test →
+                            </button>
+                        </div>
+
+                        <!-- 4. DBMS and SQL -->
+                        <div class="series-card college-group-item" data-group="BASIC_CS">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-primary" style="font-size: 0.75rem;">Series 2: Basic CS</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">30 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🗄️</span>
+                                    <span>DBMS and SQL</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Relational schema, SQL queries, joins, subqueries, indexing, normal forms, and ACID transactions.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('college_cs_dbms_and_sql', 'DBMS and SQL Assessment', 'COLLEGE', 'DBMS and SQL', null)">
+                                Configure & Start Test →
+                            </button>
+                        </div>
+
+                        <!-- 5. Operating Systems -->
+                        <div class="series-card college-group-item" data-group="BASIC_CS">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-primary" style="font-size: 0.75rem;">Series 2: Basic CS</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">30 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🖥️</span>
+                                    <span>Operating Systems</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Processes, CPU scheduling, concurrency, deadlocks, paging, virtual memory, and file systems.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('college_cs_operating_systems', 'Operating Systems Assessment', 'COLLEGE', 'Operating Systems', null)">
+                                Configure & Start Test →
+                            </button>
+                        </div>
+
+                        <!-- 6. Computer Networks -->
+                        <div class="series-card college-group-item" data-group="BASIC_CS">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-primary" style="font-size: 0.75rem;">Series 2: Basic CS</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">30 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🌐</span>
+                                    <span>Computer Networks</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    OSI & TCP/IP stack, IP addressing, routing protocols, sockets, TCP vs UDP, and HTTP/HTTPS.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('college_cs_computer_networks', 'Computer Networks Assessment', 'COLLEGE', 'Computer Networks', null)">
+                                Configure & Start Test →
+                            </button>
+                        </div>
+
+                        <!-- 7. Java Programming -->
+                        <div class="series-card college-group-item" data-group="BASIC_CS">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-primary" style="font-size: 0.75rem;">Series 2: Basic CS</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">30 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>☕</span>
+                                    <span>Java Programming</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    JVM architecture, collections framework, exception handling, multithreading, and streams.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('college_cs_java_programming', 'Java Programming Assessment', 'COLLEGE', 'Java Programming', null)">
+                                Configure & Start Test →
+                            </button>
+                        </div>
+
+                        <!-- 8. Python Programming -->
+                        <div class="series-card college-group-item" data-group="BASIC_CS">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-primary" style="font-size: 0.75rem;">Series 2: Basic CS</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">30 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🐍</span>
+                                    <span>Python Programming</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Data types, lists, dictionaries, comprehensions, decorators, generators, and OOP in Python.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('college_cs_python_programming', 'Python Programming Assessment', 'COLLEGE', 'Python Programming', null)">
+                                Configure & Start Test →
+                            </button>
+                        </div>
+
+                        <!-- 9. C Programming -->
+                        <div class="series-card college-group-item" data-group="BASIC_CS">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-primary" style="font-size: 0.75rem;">Series 2: Basic CS</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">30 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🔤</span>
+                                    <span>C Programming</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Pointers, dynamic memory allocation, structs, preprocessor directives, and bitwise operations.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('college_cs_c_programming', 'C Programming Assessment', 'COLLEGE', 'C Programming', null)">
+                                Configure & Start Test →
+                            </button>
+                        </div>
+
+                        <!-- 10. Problem Solving and Output Prediction -->
+                        <div class="series-card college-group-item" data-group="BASIC_CS">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-primary" style="font-size: 0.75rem;">Series 2: Basic CS</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">30 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🔍</span>
+                                    <span>Output Prediction</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Code tracing, scope analysis, recursion outcomes, pointer arithmetic, and tricky edge-case outputs.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('college_cs_problem_solving_and_output_prediction', 'Problem Solving and Output Prediction', 'COLLEGE', 'Problem Solving and Output Prediction', null)">
+                                Configure & Start Test →
+                            </button>
+                        </div>
+
+                        <!-- 11. Software Engineering -->
+                        <div class="series-card college-group-item" data-group="BASIC_CS">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-primary" style="font-size: 0.75rem;">Series 2: Basic CS</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">30 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>📋</span>
+                                    <span>Software Engineering</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    SDLC models, Agile/Scrum, requirements engineering, design patterns, and unit testing methodologies.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('college_cs_software_engineering', 'Software Engineering Assessment', 'COLLEGE', 'Software Engineering', null)">
+                                Configure & Start Test →
+                            </button>
+                        </div>
+
+                        <!-- 12. Computer Organization & Architecture -->
+                        <div class="series-card college-group-item" data-group="BASIC_CS">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-primary" style="font-size: 0.75rem;">Series 2: Basic CS</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">30 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🔌</span>
+                                    <span>Computer Architecture</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Instruction formats, pipelining, memory hierarchy, cache mapping, interrupts, and I/O organization.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('college_cs_computer_organization_and_architecture', 'Computer Organization & Architecture', 'COLLEGE', 'Computer Organization and Architecture', null)">
+                                Configure & Start Test →
+                            </button>
+                        </div>
+
+                        <!-- 13. Departmental Campus Pre-Screening Exam -->
+                        <div class="series-card college-group-item" data-group="COLLEGE_SPECIFIC">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-primary" style="font-size: 0.75rem; background: #4338ca;">Series 3: College Specific</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">45 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🏛️</span>
+                                    <span>Departmental Campus Pre-Screening</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Faculty-curated pre-placement aptitude and technical screening aligned with tier-1 campus drive formats.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-primary" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('college_specific_department_mock', 'Departmental Campus Pre-Screening Exam', 'COLLEGE', 'Departmental Assessment', null)">
+                                Configure & Start Pre-Screening →
+                            </button>
+                        </div>
                     </div>
                 </div>
 
                 <!-- ------------------------------------------------------------- -->
-                <!-- B. PLATFORM TEST SERIES SECTION (Initially Hidden) -->
+                <!-- B. PLATFORM TEST SERIES SECTION (Initially Hidden)           -->
                 <!-- ------------------------------------------------------------- -->
                 <div id="platformSeriesContainer" style="display: none;">
                     <div style="margin-bottom: 1.5rem;">
@@ -663,46 +993,354 @@
                             Platform Practice Tracks (Self-Paced Readiness)
                         </h2>
                         <p style="font-size: 0.875rem; color: var(--text-muted); margin: 0.25rem 0 0 0;">
-                            Independent skill tracks designed to build technical depth, consistency, and problem-solving performance independently of college tests.
+                            13 independent skill tracks designed to build technical depth, problem-solving speed, and placement interview readiness.
                         </p>
                     </div>
 
                     <!-- Platform Grid (13 Tracks) -->
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem;">
-                        <% if (platformSeries != null) {
-                            for (TestSeries ps : platformSeries) {
-                        %>
-                            <div class="series-card">
-                                <div>
-                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
-                                        <span class="badge badge-secondary" style="font-size: 0.75rem;">Platform Practice Track</span>
-                                        <span class="badge badge-outline" style="font-size: 0.75rem;"><%= ps.getDurationMinutes() %> Mins</span>
-                                    </div>
-                                    <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
-                                        <span><%= ps.getIcon() != null ? ps.getIcon() : "⚡" %></span>
-                                        <span><%= ps.getName() %></span>
-                                    </h3>
-                                    <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
-                                        <%= ps.getDescription() %>
-                                    </p>
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-                                        <div>📝 <strong><%= ps.getQuestionCount() %></strong> Questions</div>
-                                        <div>🎯 <strong>+<%= ps.getMarksPerQuestion() %></strong> Marks/Q</div>
-                                        <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
-                                        <div>✓ 3 Difficulty Levels</div>
-                                    </div>
+                        <!-- Track 1: Aptitude Practice -->
+                        <div class="series-card">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-secondary" style="font-size: 0.75rem;">Platform Practice Track</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">25 Mins</span>
                                 </div>
-                                <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('<%= ps.getSeriesId() %>', '<%= ps.getName() %>', '<%= ps.getCategory() %>', '<%= ps.getSubject() %>', null)">
-                                    Configure & Start Track →
-                                </button>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>📈</span>
+                                    <span>Aptitude Practice</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Speed math, percentages, ratios, profit & loss, time-speed-distance, and data interpretation.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
                             </div>
-                        <%  }
-                        } %>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('platform_aptitude_practice', 'Aptitude Practice', 'PLATFORM', 'Aptitude Practice', null)">
+                                Configure & Start Track →
+                            </button>
+                        </div>
+
+                        <!-- Track 2: Logical Reasoning Practice -->
+                        <div class="series-card">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-secondary" style="font-size: 0.75rem;">Platform Practice Track</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">25 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🧩</span>
+                                    <span>Logical Reasoning Practice</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Pattern sequences, seating arrangements, blood relations, syllogisms, and puzzle solving.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('platform_logical_reasoning_practice', 'Logical Reasoning Practice', 'PLATFORM', 'Logical Reasoning Practice', null)">
+                                Configure & Start Track →
+                            </button>
+                        </div>
+
+                        <!-- Track 3: Verbal Ability Practice -->
+                        <div class="series-card">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-secondary" style="font-size: 0.75rem;">Platform Practice Track</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">25 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🗣️</span>
+                                    <span>Verbal Ability Practice</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Sentence correction, comprehension passages, vocabulary, idioms, and verbal aptitude.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('platform_verbal_ability_practice', 'Verbal Ability Practice', 'PLATFORM', 'Verbal Ability Practice', null)">
+                                Configure & Start Track →
+                            </button>
+                        </div>
+
+                        <!-- Track 4: Programming Practice -->
+                        <div class="series-card">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-secondary" style="font-size: 0.75rem;">Platform Practice Track</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">25 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>💻</span>
+                                    <span>Programming Practice</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Coding foundations, syntax mechanics, control structures, and function recursion.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('platform_programming_practice', 'Programming Practice', 'PLATFORM', 'Programming Practice', null)">
+                                Configure & Start Track →
+                            </button>
+                        </div>
+
+                        <!-- Track 5: DSA Practice -->
+                        <div class="series-card">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-secondary" style="font-size: 0.75rem;">Platform Practice Track</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">25 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>⚡</span>
+                                    <span>DSA Practice</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Algorithmic problem solving, binary trees, dynamic programming, and complexity optimization.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('platform_dsa_practice', 'DSA Practice', 'PLATFORM', 'DSA Practice', null)">
+                                Configure & Start Track →
+                            </button>
+                        </div>
+
+                        <!-- Track 6: DBMS and SQL Practice -->
+                        <div class="series-card">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-secondary" style="font-size: 0.75rem;">Platform Practice Track</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">25 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>💾</span>
+                                    <span>DBMS &amp; SQL Practice</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Complex joins, aggregate grouping, transactions, constraints, views, and normalization.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('platform_dbms_and_sql_practice', 'DBMS and SQL Practice', 'PLATFORM', 'DBMS and SQL Practice', null)">
+                                Configure & Start Track →
+                            </button>
+                        </div>
+
+                        <!-- Track 7: Operating Systems Practice -->
+                        <div class="series-card">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-secondary" style="font-size: 0.75rem;">Platform Practice Track</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">25 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>⚙️</span>
+                                    <span>Operating Systems Practice</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Virtual memory management, process synchronization, CPU scheduling, and disk caching.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('platform_operating_systems_practice', 'Operating Systems Practice', 'PLATFORM', 'Operating Systems Practice', null)">
+                                Configure & Start Track →
+                            </button>
+                        </div>
+
+                        <!-- Track 8: Computer Networks Practice -->
+                        <div class="series-card">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-secondary" style="font-size: 0.75rem;">Platform Practice Track</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">25 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>📡</span>
+                                    <span>Computer Networks Practice</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Subnetting, TCP/IP flow control, DNS, HTTP, security handshakes, and socket communication.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('platform_computer_networks_practice', 'Computer Networks Practice', 'PLATFORM', 'Computer Networks Practice', null)">
+                                Configure & Start Track →
+                            </button>
+                        </div>
+
+                        <!-- Track 9: Java and OOP Practice -->
+                        <div class="series-card">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-secondary" style="font-size: 0.75rem;">Platform Practice Track</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">25 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>☕</span>
+                                    <span>Java &amp; OOP Practice</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Object orientation in Java, collections, exception handling, polymorphism, and lambda streams.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('platform_java_and_oop_practice', 'Java and OOP Practice', 'PLATFORM', 'Java and OOP Practice', null)">
+                                Configure & Start Track →
+                            </button>
+                        </div>
+
+                        <!-- Track 10: Mixed Computer Science Tests -->
+                        <div class="series-card">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-secondary" style="font-size: 0.75rem;">Platform Practice Track</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">30 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🌌</span>
+                                    <span>Mixed Computer Science</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Simulated technical round blending DSA, OS, DBMS, Networks, and programming into one test.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('platform_mixed_computer_science_tests', 'Mixed Computer Science Tests', 'PLATFORM', 'Mixed Computer Science Tests', null)">
+                                Configure & Start Track →
+                            </button>
+                        </div>
+
+                        <!-- Track 11: Coding Challenges -->
+                        <div class="series-card">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-secondary" style="font-size: 0.75rem;">Platform Practice Track</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">40 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🏆</span>
+                                    <span>Coding Challenges</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Higher-order algorithmic problems, edge case handling, output tracing, and optimization logic.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('platform_coding_challenges', 'Coding Challenges', 'PLATFORM', 'Coding Challenges', null)">
+                                Configure & Start Track →
+                            </button>
+                        </div>
+
+                        <!-- Track 12: Weak Topic Improvement Tests -->
+                        <div class="series-card">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-secondary" style="font-size: 0.75rem;">Targeted Booster</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">25 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🎯</span>
+                                    <span>Weak Topic Improvement</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Adaptive tests focused on previously missed concepts in aptitude, DSA, and databases.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('platform_weak_topic_improvement_tests', 'Weak Topic Improvement Tests', 'PLATFORM', 'Weak Topic Improvement Tests', null)">
+                                Configure & Start Track →
+                            </button>
+                        </div>
+
+                        <!-- Track 13: Personalized Revision Tests -->
+                        <div class="series-card">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <span class="badge badge-secondary" style="font-size: 0.75rem;">Revision Track</span>
+                                    <span class="badge badge-outline" style="font-size: 0.75rem;">25 Mins</span>
+                                </div>
+                                <h3 style="font-size: 1.15rem; margin-bottom: 0.4rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🔄</span>
+                                    <span>Personalized Revision</span>
+                                </h3>
+                                <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1.25rem;">
+                                    Comprehensive revision test designed to solidify retention across all four recruitment sections.
+                                </p>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: var(--text-secondary); background: #f8fafc; padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+                                    <div>📝 <strong>30</strong> Questions</div>
+                                    <div>🎯 <strong>+2</strong> Marks/Q</div>
+                                    <div>⚡ <strong>50 AI Pool</strong> Candidates</div>
+                                    <div>✓ 3 Difficulty Levels</div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline" style="width: 100%; font-weight: 600;" onclick="initiateExamSetup('platform_personalized_revision_tests', 'Personalized Revision Tests', 'PLATFORM', 'Personalized Revision Tests', null)">
+                                Configure & Start Track →
+                            </button>
+                        </div>
                     </div>
                 </div>
 
                 <!-- ------------------------------------------------------------- -->
-                <!-- Test History Table -->
+                <!-- Test History Table                                            -->
                 <!-- ------------------------------------------------------------- -->
                 <div class="data-table-card">
                     <div class="data-table-header">
@@ -724,7 +1362,7 @@
                                     <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="testHistoryTableBody">
                                 <% if (attempts != null && !attempts.isEmpty()) {
                                     for (TestAttempt a : attempts) {
                                         String catBadge = "COLLEGE".equalsIgnoreCase(a.getCategory()) ? "badge-primary" : "badge-secondary";

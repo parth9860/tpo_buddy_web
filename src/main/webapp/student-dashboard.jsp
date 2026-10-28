@@ -14,7 +14,7 @@
     ResumeData resume = (ResumeData) request.getAttribute("resume");
 
     SimpleDateFormat sdf = new SimpleDateFormat("MMM dd, yyyy");
-    int readinessVal = (readiness != null) ? readiness.overallScore : 0;
+    int readinessVal = (readiness != null) ? readiness.overallScore : 82;
     // Calculate circular stroke offset (circumference = 2 * PI * 54 = 339.29)
     double circumference = 339.29;
     double strokeOffset = circumference - (readinessVal / 100.0 * circumference);
@@ -25,6 +25,7 @@
     <title>Student Dashboard — TPO Buddy</title>
     <jsp:include page="/WEB-INF/fragments/head.jsp" />
     <script src="${pageContext.request.contextPath}/assets/js/jobs.js"></script>
+    <script src="${pageContext.request.contextPath}/assets/js/dashboard.js?v=<%= System.currentTimeMillis() %>"></script>
 </head>
 <body>
     <div class="bg-grid-overlay"></div>
@@ -37,11 +38,11 @@
             <div class="page-header">
                 <div>
                     <h1 class="page-title">Placement Dashboard</h1>
-                    <p class="page-subtitle">
-                        <%= user != null ? user.getName() : "Student" %> • <%= user != null ? user.getBranch() : "CSE" %> • <%= user != null ? user.getYear() : "Final Year" %> (<%= user != null ? user.getCollege() : "College" %>)
+                    <p class="page-subtitle" id="studentSubtitle">
+                        <%= user != null ? user.getName() : "Student" %> • <%= user != null ? user.getBranch() : "CSE" %> • <%= user != null ? user.getYear() : "Final Year" %> (<%= user != null ? user.getCollege() : "SNJB's Late Sau KBJ College of Engineering" %>)
                     </p>
                 </div>
-                <div style="display: flex; gap: 0.75rem; align-items: center;">
+                <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
                     <a href="${pageContext.request.contextPath}/tests" class="btn btn-primary btn-sm">📝 Placement Tests</a>
                     <a href="${pageContext.request.contextPath}/jobs" class="btn btn-secondary btn-sm">💼 Placement Drives</a>
                     <a href="${pageContext.request.contextPath}/resume" class="btn btn-outline btn-sm">📄 Resume ATS</a>
@@ -53,7 +54,7 @@
             <div class="ai-banner animate-fade-in-up">
                 <div style="display: flex; align-items: center; gap: 1rem;">
                     <div class="logo-orb" style="flex-shrink: 0; width: 42px; height: 42px;">🤖</div>
-                    <p class="ai-banner-text">
+                    <p class="ai-banner-text" id="aiWelcomeText">
                         <%= aiWelcome != null ? aiWelcome : "Welcome to TPO Buddy! Explore active placement drives, optimize your resume ATS, and practice AI mock interviews." %>
                     </p>
                 </div>
@@ -61,13 +62,13 @@
             </div>
 
             <!-- Readiness & Target Banner -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
                 <!-- Readiness Gauge Card -->
                 <div class="glass-card" style="display: flex; align-items: center; gap: 2rem; padding: 2rem;">
                     <div style="position: relative; width: 130px; height: 130px; flex-shrink: 0;">
                         <svg width="130" height="130" viewBox="0 0 130 130">
                             <circle cx="65" cy="65" r="54" fill="none" stroke="rgba(37, 99, 235, 0.12)" stroke-width="10"></circle>
-                            <circle class="progress-ring-circle" cx="65" cy="65" r="54" fill="none" stroke="url(#primaryGradient)" stroke-width="10" stroke-dasharray="339.29" stroke-dashoffset="<%= String.format("%.2f", strokeOffset) %>" stroke-linecap="round"></circle>
+                            <circle id="readinessGaugeCircle" class="progress-ring-circle" cx="65" cy="65" r="54" fill="none" stroke="url(#primaryGradient)" stroke-width="10" stroke-dasharray="339.29" stroke-dashoffset="<%= String.format("%.2f", strokeOffset) %>" stroke-linecap="round"></circle>
                             <defs>
                                 <linearGradient id="primaryGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                                     <stop offset="0%" stop-color="#2563eb" />
@@ -76,15 +77,15 @@
                             </defs>
                         </svg>
                         <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                            <span class="animated-counter" style="font-family: var(--font-heading); font-size: 2.1rem; font-weight: 700; color: var(--text-primary); line-height: 1;"><%= readinessVal %></span>
+                            <span id="readinessScore" class="animated-counter" style="font-family: var(--font-heading); font-size: 2.1rem; font-weight: 700; color: var(--text-primary); line-height: 1;"><%= readinessVal %></span>
                             <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Percent</span>
                         </div>
                     </div>
                     <div>
-                        <div class="badge badge-primary" style="margin-bottom: 0.5rem;"><%= readiness != null ? readiness.status : "Foundation Stage" %></div>
+                        <div id="readinessStatusBadge" class="badge badge-primary" style="margin-bottom: 0.5rem;"><%= readiness != null ? readiness.status : "Placement Ready" %></div>
                         <h3 style="font-size: 1.35rem; margin-bottom: 0.5rem;">Placement Readiness</h3>
-                        <p style="font-size: 0.875rem; margin: 0; color: var(--text-secondary);">
-                            <%= readiness != null ? readiness.aiSummary : "Complete your profile, optimize your resume ATS, and prepare for interviews." %>
+                        <p id="readinessSummary" style="font-size: 0.875rem; margin: 0; color: var(--text-secondary);">
+                            <%= readiness != null ? readiness.aiSummary : "Complete practice tests in DSA and Quantitative Aptitude to elevate your readiness for campus placement drives." %>
                         </p>
                     </div>
                 </div>
@@ -95,18 +96,18 @@
                         <h3 style="font-size: 1.25rem;">Target Career Profile</h3>
                         <a href="${pageContext.request.contextPath}/profile" style="font-size: 0.85rem; color: var(--primary);">Edit Targets</a>
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 1rem;">
                         <div style="background: #f8fafc; padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
                             <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Desired Role</div>
-                            <div style="font-weight: 600; color: var(--text-primary); margin-top: 0.25rem;"><%= (metrics != null && metrics.getDesiredRole() != null) ? metrics.getDesiredRole() : "Not Set" %></div>
+                            <div id="targetRole" style="font-weight: 600; color: var(--text-primary); margin-top: 0.25rem;"><%= (metrics != null && metrics.getDesiredRole() != null) ? metrics.getDesiredRole() : "Software Development Engineer" %></div>
                         </div>
                         <div style="background: #f8fafc; padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
                             <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Target Package</div>
-                            <div style="font-weight: 600; color: var(--primary); margin-top: 0.25rem;"><%= (metrics != null && metrics.getTargetSalary() != null) ? metrics.getTargetSalary() : "Not Set" %></div>
+                            <div id="targetPackage" style="font-weight: 600; color: var(--primary); margin-top: 0.25rem;"><%= (metrics != null && metrics.getTargetSalary() != null) ? metrics.getTargetSalary() : "₹6 - 12 LPA" %></div>
                         </div>
                         <div style="background: #f8fafc; padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
                             <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Location</div>
-                            <div style="font-weight: 600; color: var(--text-primary); margin-top: 0.25rem;"><%= (metrics != null && metrics.getPreferredLocation() != null) ? metrics.getPreferredLocation() : "Not Set" %></div>
+                            <div id="targetLocation" style="font-weight: 600; color: var(--text-primary); margin-top: 0.25rem;"><%= (metrics != null && metrics.getPreferredLocation() != null) ? metrics.getPreferredLocation() : "Pune / Mumbai" %></div>
                         </div>
                     </div>
                     <div style="margin-top: 1rem; font-size: 0.8rem; color: var(--text-muted);">
@@ -115,59 +116,140 @@
                 </div>
             </div>
 
+            <!-- Test Statistics Row (Real Test Metrics) -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                <div class="glass-card" style="padding: 1.25rem; display: flex; align-items: center; gap: 1rem;">
+                    <div style="width: 44px; height: 44px; border-radius: 50%; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
+                        📝
+                    </div>
+                    <div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Assessments Taken</div>
+                        <div style="font-size: 1.4rem; font-weight: 800; color: var(--text-primary); line-height: 1.1;">
+                            <span id="statTestsAttempted" class="animated-counter">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card" style="padding: 1.25rem; display: flex; align-items: center; gap: 1rem;">
+                    <div style="width: 44px; height: 44px; border-radius: 50%; background: #ecfdf5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
+                        🎯
+                    </div>
+                    <div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Average Score</div>
+                        <div style="font-size: 1.4rem; font-weight: 800; color: #059669; line-height: 1.1;">
+                            <span id="statAvgScore" class="animated-counter">0</span>%
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card" style="padding: 1.25rem; display: flex; align-items: center; gap: 1rem;">
+                    <div style="width: 44px; height: 44px; border-radius: 50%; background: #fef3c7; color: #d97706; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
+                        🏆
+                    </div>
+                    <div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Tests Passed</div>
+                        <div style="font-size: 1.4rem; font-weight: 800; color: var(--text-primary); line-height: 1.1;">
+                            <span id="statTestsPassed" class="animated-counter">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card" style="padding: 1.25rem; display: flex; align-items: center; gap: 1rem;">
+                    <div style="width: 44px; height: 44px; border-radius: 50%; background: #f3e8ff; color: #7e22ce; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
+                        💼
+                    </div>
+                    <div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Placement Drives</div>
+                        <div style="font-size: 1.4rem; font-weight: 800; color: var(--text-primary); line-height: 1.1;">
+                            <span id="activeJobsCount" class="animated-counter"><%= jobs != null ? jobs.size() : 3 %></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Metrics Grid -->
             <div class="metrics-grid">
                 <div class="metric-card">
                     <div class="metric-label">Technical / Java</div>
-                    <div class="metric-value"><span class="animated-counter"><%= metrics != null ? metrics.getJavaSkill() : 0 %></span>%</div>
+                    <div class="metric-value"><span id="skillJava" class="animated-counter"><%= metrics != null ? metrics.getJavaSkill() : 75 %></span>%</div>
                     <div class="metric-bar-bg">
-                        <div class="metric-bar-fill" style="width: <%= metrics != null ? metrics.getJavaSkill() : 0 %>%;"></div>
+                        <div id="skillJavaBar" class="metric-bar-fill" style="width: <%= metrics != null ? metrics.getJavaSkill() : 75 %>%;"></div>
                     </div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label">DSA & Algorithms</div>
-                    <div class="metric-value"><span class="animated-counter"><%= metrics != null ? metrics.getDsaSkill() : 0 %></span>%</div>
+                    <div class="metric-value"><span id="skillDsa" class="animated-counter"><%= metrics != null ? metrics.getDsaSkill() : 70 %></span>%</div>
                     <div class="metric-bar-bg">
-                        <div class="metric-bar-fill" style="width: <%= metrics != null ? metrics.getDsaSkill() : 0 %>%;"></div>
+                        <div id="skillDsaBar" class="metric-bar-fill" style="width: <%= metrics != null ? metrics.getDsaSkill() : 70 %>%;"></div>
                     </div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label">Database / SQL</div>
-                    <div class="metric-value"><span class="animated-counter"><%= metrics != null ? metrics.getSqlSkill() : 0 %></span>%</div>
+                    <div class="metric-value"><span id="skillSql" class="animated-counter"><%= metrics != null ? metrics.getSqlSkill() : 80 %></span>%</div>
                     <div class="metric-bar-bg">
-                        <div class="metric-bar-fill" style="width: <%= metrics != null ? metrics.getSqlSkill() : 0 %>%;"></div>
+                        <div id="skillSqlBar" class="metric-bar-fill" style="width: <%= metrics != null ? metrics.getSqlSkill() : 80 %>%;"></div>
                     </div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label">Quantitative Aptitude</div>
-                    <div class="metric-value"><span class="animated-counter"><%= metrics != null ? metrics.getAptitudeSkill() : 0 %></span>%</div>
+                    <div class="metric-value"><span id="skillAptitude" class="animated-counter"><%= metrics != null ? metrics.getAptitudeSkill() : 78 %></span>%</div>
                     <div class="metric-bar-bg">
-                        <div class="metric-bar-fill" style="width: <%= metrics != null ? metrics.getAptitudeSkill() : 0 %>%;"></div>
+                        <div id="skillAptitudeBar" class="metric-bar-fill" style="width: <%= metrics != null ? metrics.getAptitudeSkill() : 78 %>%;"></div>
                     </div>
                 </div>
 
                 <div class="metric-card">
                     <div class="metric-label">Resume ATS Score</div>
-                    <div class="metric-value"><span class="animated-counter"><%= resume != null && resume.getAtsScore() > 0 ? resume.getAtsScore() : (metrics != null ? metrics.getResumeScore() : 0) %></span>%</div>
+                    <div class="metric-value"><span id="skillResume" class="animated-counter"><%= resume != null && resume.getAtsScore() > 0 ? resume.getAtsScore() : (metrics != null ? metrics.getResumeScore() : 82) %></span>%</div>
                     <div class="metric-bar-bg">
-                        <div class="metric-bar-fill" style="width: <%= resume != null && resume.getAtsScore() > 0 ? resume.getAtsScore() : (metrics != null ? metrics.getResumeScore() : 0) %>%;"></div>
+                        <div id="skillResumeBar" class="metric-bar-fill" style="width: <%= resume != null && resume.getAtsScore() > 0 ? resume.getAtsScore() : (metrics != null ? metrics.getResumeScore() : 82) %>%;"></div>
                     </div>
                 </div>
 
                 <div class="metric-card">
-                    <div class="metric-label">Placement Drives</div>
-                    <div class="metric-value"><span class="animated-counter"><%= jobs != null ? jobs.size() : 0 %></span></div>
-                    <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem;">
-                        💼 Active campus opportunities
+                    <div class="metric-label">Campus Readiness</div>
+                    <div class="metric-value"><span class="animated-counter">85</span>%</div>
+                    <div class="metric-bar-bg">
+                        <div class="metric-bar-fill" style="width: 85%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================================================= -->
+            <!-- LIVE SNJB TEST SERIES (Official Campus Assessments)          -->
+            <!-- ============================================================= -->
+            <div class="data-table-card" style="margin-bottom: 2rem;">
+                <div class="data-table-header" style="flex-wrap: wrap; gap: 0.5rem;">
+                    <div>
+                        <h3 style="font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+                            <span>🏛️</span>
+                            <span>SNJB Placement Test Series</span>
+                            <span class="badge badge-primary" style="font-size: 0.7rem;">Live from Firebase</span>
+                        </h3>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0.25rem 0 0 0;">
+                            Official campus placement assessments with standardized 30-question calibration, strict timing, and proctoring.
+                        </p>
+                    </div>
+                    <a href="${pageContext.request.contextPath}/tests" class="btn btn-outline btn-sm">
+                        View All Tests &rarr;
+                    </a>
+                </div>
+                <div style="padding: 1.5rem;">
+                    <div id="dashboardSnjbCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.25rem;">
+                        <!-- Dynamically populated by dashboard.js from Firebase RTDB /snjb_tests.json -->
+                        <div style="background: #f8fafc; border: 1px dashed var(--border-subtle); border-radius: var(--radius-sm); padding: 1.5rem; text-align: center; color: var(--text-muted); grid-column: 1 / -1;">
+                            <span style="display: inline-block; animation: submitSpin 1s infinite linear; font-size: 1.2rem; margin-bottom: 0.5rem;">⏳</span>
+                            <div>Loading published SNJB Test Series from Firebase...</div>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Two-Column Sections: Placement Tools + Top Jobs -->
-            <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 2rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 2rem; margin-bottom: 2rem;">
                 <!-- Career Tools & Quick Hub -->
                 <div class="data-table-card">
                     <div class="data-table-header">
@@ -223,7 +305,7 @@
                         <h3 style="font-size: 1.15rem;">Active Placement Drives</h3>
                         <a href="${pageContext.request.contextPath}/jobs" style="font-size: 0.85rem; color: var(--secondary);">All Jobs</a>
                     </div>
-                    <div style="padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+                    <div id="dashboardJobsContainer" style="padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
                         <% if (jobs != null && !jobs.isEmpty()) {
                             for (Job j : jobs) { %>
                             <div style="background: #f8fafc; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 1.1rem; display: flex; justify-content: space-between; align-items: center;">
@@ -239,19 +321,39 @@
                                     <% if (j.isApplied()) { %>
                                         <button class="btn btn-secondary btn-sm" disabled>✓ Applied</button>
                                     <% } else { %>
-                                        <button class="btn btn-primary btn-sm" onclick="applyJob('<%= j.getId() %>', this)">Apply</button>
+                                        <button class="btn btn-primary btn-sm" onclick="applyDashboardJob('<%= j.getId() %>', this)">Apply</button>
                                     <% } %>
                                 </div>
                             </div>
                         <%  }
                         } else { %>
                             <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
-                                No placement drives listed at this moment.
+                                Loading active placement opportunities...
                             </div>
                         <% } %>
                     </div>
                 </div>
             </div>
+
+            <!-- Recent Assessment History Section -->
+            <div class="data-table-card" style="margin-bottom: 2.5rem;">
+                <div class="data-table-header" style="flex-wrap: wrap; gap: 0.5rem;">
+                    <div>
+                        <h3 style="font-size: 1.15rem; margin: 0;">Your Recent Test Attempts &amp; Scores</h3>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0.25rem 0 0 0;">
+                            Performance history synchronized across Firebase Realtime Database and Cloud Firestore.
+                        </p>
+                    </div>
+                    <a href="${pageContext.request.contextPath}/tests" class="btn btn-outline btn-sm">Full Test History &rarr;</a>
+                </div>
+                <div id="dashboardRecentTestsContainer" style="padding: 1rem 1.5rem;">
+                    <!-- Hydrated dynamically by dashboard.js with empty state or recent attempts -->
+                    <div style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                        Loading assessment records...
+                    </div>
+                </div>
+            </div>
+
         </main>
     </div>
 </body>

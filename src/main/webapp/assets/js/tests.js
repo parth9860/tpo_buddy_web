@@ -1545,6 +1545,38 @@ async function submitAssessmentTest(reason = 'manual') {
 
                 submissionState = 'SUBMITTED';
                 isSubmitting = false;
+
+                // Sync attempt result to Firebase RTDB for student profile & history
+                let currentUid = null;
+                try {
+                    const u = localStorage.getItem('currentUser');
+                    if (u) currentUid = JSON.parse(u).uid;
+                } catch(e){}
+                if (currentUid) {
+                    try {
+                        fetch(`https://tpobuddy-default-rtdb.firebaseio.com/test_attempts/${currentUid}/${submittedAttemptId}.json`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                id: submittedAttemptId,
+                                testId: selectedSeriesId,
+                                seriesId: selectedSeriesId,
+                                testTitle: selectedTitle,
+                                topic: selectedSubject || selectedTitle,
+                                category: selectedCategory,
+                                difficulty: selectedDifficulty,
+                                score: result.score,
+                                correctAnswers: result.correctCount,
+                                totalQuestions: result.totalQuestions,
+                                passed: result.passed,
+                                riskLevel: result.riskLevel,
+                                savedAt: Date.now(),
+                                status: 'SUBMITTED'
+                            })
+                        }).catch(e => console.warn('Firebase RTDB save note:', e));
+                    } catch(e){}
+                }
+
                 updateSubmissionStatusMessage('Submission confirmed. Opening your result...');
                 activeAttemptId = null;
                 setTimeout(() => {
@@ -1765,10 +1797,11 @@ function retakeCurrentAssessment() {
 }
 
 // -------------------------------------------------------------
-// Active Session Resume on Page Refresh
+// Active Session Resume on Page Refresh & Dynamic Catalogue
 // -------------------------------------------------------------
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // 1. Check active in-progress exam session
     try {
         const res = await fetch(`${window.CONTEXT_PATH}/api/tests/active-session`);
         const data = await res.json();
@@ -1795,7 +1828,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 modal.classList.add('active');
             }
         } else {
-            // Explicitly ensure resume modal is hidden when no active attempt exists
             const modal = document.getElementById('sessionResumeModal');
             if (modal) modal.classList.remove('active');
             activeAttemptId = null;
@@ -1803,7 +1835,252 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (e) {
         console.warn('Error verifying active session:', e);
     }
+
+    // 2. Initialize dynamic test series page features
+    initTestSeriesPage();
 });
+
+async function initTestSeriesPage() {
+    // 1. Check URL parameters for direct deep-link or autoStart from Dashboard
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const autoStart = params.get('autoStart');
+        const sId = params.get('seriesId');
+        const sTitle = params.get('title');
+        const sCat = params.get('category') || 'COLLEGE';
+        const sSub = params.get('subject') || params.get('topic');
+        const sTop = params.get('topic');
+
+        if (autoStart === 'true' && sId) {
+            console.info('Auto-launching test setup from query params:', sId, sTitle);
+            setTimeout(() => {
+                initiateExamSetup(sId, sTitle || 'Assessment', sCat, sSub || sTitle, sTop);
+            }, 350);
+        }
+    } catch(e){}
+
+    // 2. Fetch live published SNJB Tests from Firebase RTDB
+    loadLiveSnjbTestsForTestPage();
+
+    // 3. Hydrate Assessment History from Firebase RTDB & localStorage
+    loadStudentTestHistory();
+}
+
+async function loadLiveSnjbTestsForTestPage() {
+    const container = document.getElementById('firebaseSnjbCollegeTestsContainer');
+    if (!container) return;
+
+    let tests = [];
+    try {
+        const res = await fetch('https://tpobuddy-default-rtdb.firebaseio.com/snjb_tests.json');
+        if (res.ok) {
+            const data = await res.json();
+            if (data) {
+                tests = Object.keys(data).map(key => ({
+                    id: key,
+                    ...data[key]
+                }));
+            }
+        }
+    } catch(e) {
+        console.warn('RTDB snjb_tests fetch note:', e);
+    }
+
+    if (!tests || tests.length === 0) {
+        tests = [
+            {
+                id: "snjb-placement-test-1",
+                title: "Test 1: Number System, HCF/LCM and Divisibility",
+                topic: "Number System, HCF/LCM and Divisibility",
+                shortDescription: "Number system, HCF/LCM, divisibility rules and applications.",
+                durationMinutes: 30,
+                questionCount: 30,
+                status: "PUBLISHED",
+                allowedAttempts: 3
+            },
+            {
+                id: "snjb-placement-test-2",
+                title: "Test 2: Percentages",
+                topic: "Percentages",
+                shortDescription: "Percentage calculations, variations, and applications in aptitude.",
+                durationMinutes: 30,
+                questionCount: 30,
+                status: "PUBLISHED",
+                allowedAttempts: 3
+            },
+            {
+                id: "snjb-placement-test-3",
+                title: "Test 3: Profit, Loss and Discounts",
+                topic: "Profit, Loss and Discounts",
+                shortDescription: "Cost price, marked price, discounts, margins, and profit calculations.",
+                durationMinutes: 30,
+                questionCount: 30,
+                status: "PUBLISHED",
+                allowedAttempts: 3
+            },
+            {
+                id: "snjb-placement-test-4",
+                title: "Test 4: Mixed Quantitative Aptitude",
+                topic: "Mixed Quantitative Aptitude",
+                shortDescription: "All six foundational topics combined into a comprehensive mock.",
+                durationMinutes: 30,
+                questionCount: 30,
+                status: "PUBLISHED",
+                allowedAttempts: 3
+            }
+        ];
+    }
+
+    // Check student attempt counts
+    let localAttempts = [];
+    try {
+        const hist = localStorage.getItem('tpo_attempts_history');
+        if (hist) localAttempts = JSON.parse(hist);
+    } catch(e){}
+
+    const attemptMap = {};
+    const bestScoreMap = {};
+    localAttempts.forEach(a => {
+        const tid = a.testId || a.seriesId || a.id;
+        if (tid) {
+            attemptMap[tid] = (attemptMap[tid] || 0) + 1;
+            bestScoreMap[tid] = Math.max(bestScoreMap[tid] || 0, Number(a.score) || 0);
+        }
+    });
+
+    const cardsHtml = tests.map(t => {
+        const maxAttempts = t.allowedAttempts || 3;
+        const used = attemptMap[t.id] || 0;
+        const isLocked = used >= maxAttempts;
+        const hasAttempted = used > 0;
+        const best = bestScoreMap[t.id];
+
+        let buttonHtml = '';
+        if (isLocked) {
+            buttonHtml = `<button class="btn btn-outline btn-sm" disabled style="width: 100%; opacity: 0.6; cursor: not-allowed;">🔒 Attempts Limit Reached (${used}/${maxAttempts})</button>`;
+        } else if (hasAttempted) {
+            buttonHtml = `<button class="btn btn-primary btn-sm" style="width: 100%;" onclick="initiateExamSetup('${escapeHtml(t.id)}', '${escapeHtml(t.title)}', 'COLLEGE', '${escapeHtml(t.topic)}', '${escapeHtml(t.topic)}')">Retake Test (${used}/${maxAttempts}) • Best: ${best}%</button>`;
+        } else {
+            buttonHtml = `<button class="btn btn-primary btn-sm" style="width: 100%;" onclick="initiateExamSetup('${escapeHtml(t.id)}', '${escapeHtml(t.title)}', 'COLLEGE', '${escapeHtml(t.topic)}', '${escapeHtml(t.topic)}')">Configure &amp; Start Test &rarr;</button>`;
+        }
+
+        return `
+            <div class="series-card college-group-item" data-group="SNJB_PLACEMENT" style="background: #ffffff; border: 1.5px solid #3b82f6; border-radius: var(--radius-sm); padding: 1.25rem; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.65rem;">
+                        <span class="badge badge-primary" style="font-size: 0.7rem;">SNJB Series</span>
+                        <span class="badge badge-outline" style="font-size: 0.7rem;">${t.durationMinutes || 30} Mins</span>
+                    </div>
+                    <h3 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.35rem; color: var(--text-primary); display: flex; align-items: center; gap: 0.4rem;">
+                        <span>🏛️</span>
+                        <span>${escapeHtml(t.title)}</span>
+                    </h3>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1rem;">
+                        ${escapeHtml(t.shortDescription || t.topic || 'SNJB Placement Assessment')}
+                    </p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.15rem; font-size: 0.75rem; color: var(--text-secondary); background: #f8fafc; padding: 0.65rem; border-radius: 4px; border: 1px solid var(--border-subtle);">
+                        <div>📝 <strong>${t.questionCount || 30}</strong> Questions</div>
+                        <div>🎯 <strong>+${t.marksPerQuestion || 2}</strong> Marks/Q</div>
+                        <div>⚡ <strong>50 AI Pool</strong></div>
+                        <div>🔒 <strong>${maxAttempts}</strong> Max Attempts</div>
+                    </div>
+                </div>
+                <div>
+                    ${buttonHtml}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = cardsHtml;
+}
+
+async function loadStudentTestHistory() {
+    const tbody = document.getElementById('testHistoryTableBody');
+    if (!tbody) return;
+
+    let uid = null;
+    try {
+        const u = localStorage.getItem('currentUser');
+        if (u) uid = JSON.parse(u).uid;
+    } catch(e){}
+
+    let attempts = [];
+
+    // 1. Fetch from Firebase RTDB if uid is known
+    if (uid) {
+        try {
+            const res = await fetch(`https://tpobuddy-default-rtdb.firebaseio.com/test_attempts/${uid}.json`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data) {
+                    attempts = Object.keys(data).map(key => ({
+                        id: key,
+                        ...data[key]
+                    }));
+                }
+            }
+        } catch(e){}
+    }
+
+    // 2. Merge with localStorage history
+    try {
+        const histStr = localStorage.getItem('tpo_attempts_history');
+        if (histStr) {
+            const localHist = JSON.parse(histStr);
+            const existingIds = new Set(attempts.map(a => a.id));
+            localHist.forEach(la => {
+                if (!existingIds.has(la.id)) {
+                    attempts.push({
+                        id: la.id,
+                        testTitle: la.title,
+                        category: la.category,
+                        score: la.score,
+                        passed: la.passed,
+                        savedAt: new Date(la.date).getTime() || Date.now()
+                    });
+                    existingIds.add(la.id);
+                }
+            });
+        }
+    } catch(e){}
+
+    if (!attempts || attempts.length === 0) {
+        return; // Keep existing empty state
+    }
+
+    // Sort by recent
+    const sorted = [...attempts].sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+
+    tbody.innerHTML = sorted.map(a => {
+        const isCollege = !a.category || a.category.toUpperCase().includes('COLLEGE');
+        const badgeClass = isCollege ? 'badge-primary' : 'badge-secondary';
+        const diff = a.difficulty || 'Medium';
+        const isPassed = (a.score >= 60 || a.passed);
+        const scoreColor = isPassed ? 'var(--accent-emerald)' : 'var(--accent-amber)';
+        const riskLevel = a.riskLevel || 'LOW';
+        const riskBadge = (riskLevel === 'HIGH') ? 'badge-danger' : ((riskLevel === 'MODERATE') ? 'badge-warning' : 'badge-success');
+        const dateStr = a.savedAt ? new Date(a.savedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently';
+
+        return `
+            <tr>
+                <td><span class="badge ${badgeClass}" style="font-size: 0.75rem;">${escapeHtml(a.category || 'COLLEGE')}</span></td>
+                <td style="font-weight: 600; color: var(--text-primary);">${escapeHtml(a.testTitle || a.topic || 'Assessment')}</td>
+                <td><span class="badge badge-outline" style="font-size: 0.75rem;">${escapeHtml(diff)}</span></td>
+                <td style="font-weight: 700; color: ${scoreColor};">${a.score || 0}%</td>
+                <td>${a.correctAnswers !== undefined ? `${a.correctAnswers} / ${a.totalQuestions || 30}` : 'Completed'}</td>
+                <td><span class="badge ${riskBadge}">${escapeHtml(riskLevel)}</span></td>
+                <td><span class="badge ${isPassed ? 'badge-success' : 'badge-warning'}">${isPassed ? 'PASSED' : 'NEEDS PRACTICE'}</span></td>
+                <td>${dateStr}</td>
+                <td>
+                    <a href="${window.CONTEXT_PATH || ''}/test-result?attemptId=${encodeURIComponent(a.id)}" class="btn btn-outline btn-xs" style="color: var(--primary); font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem;">
+                        <span>📊</span> Review
+                    </a>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
 
 function dismissResumeModal() {
     const modal = document.getElementById('sessionResumeModal');

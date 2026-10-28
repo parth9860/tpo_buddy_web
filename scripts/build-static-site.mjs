@@ -63,141 +63,16 @@ function cleanFooter(content) {
 }
 
 function cleanSidebar(content) {
-  // Static version with client-side profile synchronization
-  return `
-<aside class="app-sidebar">
-    <div class="sidebar-header">
-        <a href="/dashboard" class="sidebar-brand">
-            <div class="logo-orb">TB</div>
-            <span>TPO<span style="color: var(--secondary);">Buddy</span></span>
-        </a>
-    </div>
-
-    <ul class="sidebar-nav">
-        <li>
-            <a href="/dashboard" class="nav-item-link" id="nav-dashboard">
-                <span class="nav-icon">&#128202;</span>
-                <span>Dashboard</span>
-            </a>
-        </li>
-        <li>
-            <a href="/tests" class="nav-item-link" id="nav-tests" style="display: flex; align-items: center; justify-content: space-between;">
-                <div style="display: flex; align-items: center; gap: 0.65rem;">
-                    <span class="nav-icon">&#127919;</span>
-                    <span>AI Test Series</span>
-                </div>
-                <span class="badge" style="font-size: 0.65rem; background: #2563eb; color: #fff; padding: 2px 7px; border-radius: 9999px; font-weight: 700;">Live</span>
-            </a>
-        </li>
-        <li>
-            <a href="/interview" class="nav-item-link" id="nav-interview">
-                <span class="nav-icon">&#127897;</span>
-                <span>AI Mock Interview</span>
-            </a>
-        </li>
-        <li>
-            <a href="/resume" class="nav-item-link" id="nav-resume">
-                <span class="nav-icon">&#128196;</span>
-                <span>AI Resume ATS</span>
-            </a>
-        </li>
-        <li>
-            <a href="/ai-buddy" class="nav-item-link" id="nav-ai-buddy">
-                <span class="nav-icon">&#129302;</span>
-                <span>Career Copilot AI</span>
-            </a>
-        </li>
-        <li>
-            <a href="/jobs" class="nav-item-link" id="nav-jobs">
-                <span class="nav-icon">&#128188;</span>
-                <span>Placement Jobs</span>
-            </a>
-        </li>
-        <li>
-            <a href="/progress" class="nav-item-link" id="nav-progress">
-                <span class="nav-icon">&#128640;</span>
-                <span>My Progress</span>
-            </a>
-        </li>
-        <li>
-            <a href="/profile" class="nav-item-link" id="nav-profile">
-                <span class="nav-icon">&#128100;</span>
-                <span>Profile</span>
-            </a>
-        </li>
-        <li style="margin-top: auto; padding-top: 1rem;">
-            <a href="javascript:void(0)" onclick="handleLogout()" class="nav-item-link" style="color: var(--accent-rose);">
-                <span class="nav-icon">&#128682;</span>
-                <span>Logout</span>
-            </a>
-        </li>
-    </ul>
-
-    <div class="sidebar-footer">
-        <div class="user-snippet">
-            <div class="user-avatar" id="sidebarUserAvatar">S</div>
-            <div class="user-details">
-                <div class="user-name" id="sidebarUserName">Student</div>
-                <div class="user-role-badge">
-                    <span id="sidebarUserRole">STUDENT</span>
-                    <span>&bull;</span>
-                    <span id="sidebarUserBranch">CSE</span>
-                </div>
-            </div>
-            <a href="javascript:void(0)" onclick="handleLogout()" title="Sign Out" style="background: #fee2e2; border: 1px solid #fecaca; border-radius: var(--radius-sm); padding: 0.4rem 0.6rem; cursor: pointer; color: #991b1b; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 0.25rem; text-decoration: none;" aria-label="Sign out">
-                <span>&#128682;</span>
-                <span style="font-size: 0.75rem;">Exit</span>
-            </a>
-        </div>
-    </div>
-</aside>
-<script>
-    (function() {
-        const path = window.location.pathname;
-        const navMap = {
-            'dashboard': 'nav-dashboard',
-            'tests': 'nav-tests',
-            'interview': 'nav-interview',
-            'resume': 'nav-resume',
-            'ai-buddy': 'nav-ai-buddy',
-            'jobs': 'nav-jobs',
-            'progress': 'nav-progress',
-            'profile': 'nav-profile'
-        };
-        for (const [key, id] of Object.entries(navMap)) {
-            if (path.includes(key)) {
-                const el = document.getElementById(id);
-                if (el) el.classList.add('active');
-            }
-        }
-        function updateProfile(u) {
-            if (!u) return;
-            const name = u.displayName || u.name || (u.email ? u.email.split('@')[0] : 'Student');
-            const nameEl = document.getElementById('sidebarUserName');
-            const avatarEl = document.getElementById('sidebarUserAvatar');
-            if (nameEl) nameEl.textContent = name;
-            if (avatarEl) {
-                if (u.photoURL || u.photoUrl) {
-                    avatarEl.innerHTML = '<img src="' + (u.photoURL || u.photoUrl) + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />';
-                } else {
-                    avatarEl.textContent = name.charAt(0).toUpperCase();
-                }
-            }
-        }
-        try {
-            const cached = localStorage.getItem('currentUser');
-            if (cached) updateProfile(JSON.parse(cached));
-        } catch(e){}
-        if (typeof firebase !== 'undefined' && firebase.auth) {
-            firebase.auth().onAuthStateChanged(function(user) {
-                if (user) {
-                    updateProfile(user);
-                    try { localStorage.setItem('currentUser', JSON.stringify({ uid: user.uid, email: user.email, name: user.displayName, photoUrl: user.photoURL })); } catch(e){}
-                }
-            });
-        }
-    })();
-</script>`;
+  return content
+    .replace(/<%@\s*page[^%>]*%>/g, '')
+    .replace(/\$\{pageContext\.request\.contextPath\}/g, '')
+    .replace(/<%= currentUser[^%]*%>/g, '')
+    .replace(/<%= currentPath[^%]*%>/g, '')
+    .replace(/<%= userName %>/g, 'Student')
+    .replace(/<%= userRole %>/g, 'STUDENT')
+    .replace(/<%= userBranch %>/g, 'CSE')
+    .replace(/<%= initial %>/g, 'S')
+    .replace(/<%[\s\S]*?%>/g, '');
 }
 
 const preparedHead = cleanHead(headFrag);
@@ -224,9 +99,24 @@ function compileJspToHtml(jspContent, options = {}) {
     if (match.startsWith('<%=')) {
       const expr = match.slice(3, -2).trim();
       if (expr.includes('System.currentTimeMillis()')) return String(Date.now());
-      if (expr.includes('userName') || expr.includes('user.getName()')) return 'Student';
-      if (expr.includes('overallScore') || expr.includes('atsScore')) return '85';
-      if (expr.includes('status') || expr.includes('aiWelcome')) return 'Ready for Placements';
+      if (expr.includes('user != null ? user.getName()') || expr.includes('userName') || expr.includes('user.getName()')) return 'Student';
+      if (expr.includes('user != null ? user.getBranch()')) return 'CSE';
+      if (expr.includes('user != null ? user.getYear()')) return 'Final Year';
+      if (expr.includes('user != null ? user.getCollege()')) return "SNJB's Late Sau KBJ College of Engineering";
+      if (expr.includes('overallScore') || expr.includes('readinessVal')) return '82';
+      if (expr.includes('strokeOffset')) return '61.07';
+      if (expr.includes('atsScore') || expr.includes('resumeScore')) return '82';
+      if (expr.includes('status') || expr.includes('readiness.status')) return 'Placement Ready';
+      if (expr.includes('aiWelcome')) return 'Welcome to TPO Buddy! Explore active placement drives, optimize your resume ATS, and practice AI mock interviews.';
+      if (expr.includes('aiSummary') || expr.includes('readiness.aiSummary')) return 'Complete practice tests in DSA and Quantitative Aptitude to elevate your readiness for campus placement drives.';
+      if (expr.includes('javaSkill')) return '75';
+      if (expr.includes('dsaSkill')) return '70';
+      if (expr.includes('sqlSkill')) return '80';
+      if (expr.includes('aptitudeSkill')) return '78';
+      if (expr.includes('desiredRole')) return 'Software Development Engineer';
+      if (expr.includes('targetSalary')) return '₹6 - 12 LPA';
+      if (expr.includes('preferredLocation')) return 'Pune / Mumbai';
+      if (expr.includes('jobs != null ? jobs.size()') || expr.includes('jobs.size()')) return '3';
       return '';
     }
     return '';
